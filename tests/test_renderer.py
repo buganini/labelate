@@ -126,3 +126,22 @@ def test_rect_outline_radius_and_validation():
     obj['radius_mm'] = -1
     with pytest.raises(ValueError, match='radius_mm'):
         dumps(template)
+
+
+@pytest.mark.parametrize('style,weight', [('normal','normal'), ('normal','bold'), ('italic','normal'), ('italic','bold')])
+def test_multiline_text_has_multiple_ink_rows(style, weight):
+    from labelate.renderer import object_image
+    template = new_template()
+    obj = new_object('text')
+    obj.update(content='Hello {name}\nSecond line', width_mm=80, height_mm=30,
+               font_style=style, font_weight=weight)
+    template['objects'] = [obj]
+    template['variables'] = {'name': 'Ada'}
+    image = render(dumps(template), {})
+    assert image.mode == '1'
+    tile = object_image(obj, template['canvas'], template['variables'])
+    alpha = tile.getchannel('A')
+    occupied = [alpha.crop((0, y, alpha.width, y + 1)).getbbox() is not None for y in range(alpha.height)]
+    runs = sum(value and (index == 0 or not occupied[index - 1]) for index, value in enumerate(occupied))
+    assert runs >= 2
+    assert alpha.getbbox()[1] == 0

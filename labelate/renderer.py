@@ -45,8 +45,13 @@ def object_image(obj, canvas, values):
         color = obj.get("color", "#000000") if canvas["mode"] == "color" else "#000000"
         ImageColor.getrgb(color)
         stroke = max(1, round(font_pixels / 30)) if obj.get("font_weight", "normal") == "bold" else 0
-        ImageDraw.Draw(tile).multiline_text((stroke, stroke), content, font=font, fill=color,
-                                          spacing=0, anchor="lt", stroke_width=stroke, stroke_fill=color)
+        draw = ImageDraw.Draw(tile)
+        # Pillow does not support the top ("t") anchor for multiline text.
+        # Offset the ascender-anchored bounding box to keep visible ink at (0, 0).
+        bounds = draw.multiline_textbbox((0, 0), content, font=font, spacing=0,
+                                         anchor='la', stroke_width=stroke)
+        draw.multiline_text((-bounds[0], -bounds[1]), content, font=font, fill=color,
+                           spacing=0, anchor='la', stroke_width=stroke, stroke_fill=color)
         if obj.get("font_style", "normal") == "italic":
             bounds = tile.getbbox()
             if bounds:
