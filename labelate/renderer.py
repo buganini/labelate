@@ -7,6 +7,7 @@ from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps
 
 from .model import loads, substitute
 
+DEFAULT_FONT = Path(__file__).with_name('fonts') / 'NotoSansCJKtc-Regular.otf'
 
 def pixels(mm, dpi):
     return max(1, round(mm * dpi / 25.4))
@@ -15,6 +16,8 @@ def pixels(mm, dpi):
 def load_font(path, size):
     if path:
         return ImageFont.truetype(path, size)
+    if DEFAULT_FONT.is_file():
+        return ImageFont.truetype(str(DEFAULT_FONT), size)
     for candidate in ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
                       "/System/Library/Fonts/Supplemental/Arial.ttf",
                       "C:/Windows/Fonts/arial.ttf", "DejaVuSans.ttf"):

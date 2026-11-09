@@ -3,13 +3,14 @@ import math
 import zipfile
 from pathlib import Path
 
-import PUI.pyodide as UI
+import PUI.PySide6 as UI
 from PIL import Image, ImageDraw, ImageColor
 
 from .model import (new_template, new_object, variable_names, reconcile_variables,
                     dumps, display_length, millimetres, LABEL_PRESETS, UNIT_MM)
 from .renderer import render, object_image, pixels
-from .template_io import open_document, portable_document, write_package
+from .template_io import open_document, write_package
+from . import platform
 
 
 class Binding:
@@ -43,6 +44,10 @@ class Labelate(UI.Application):
         self.binding_scope = "label"
         self.refresh_preview()
 
+    def update(self, prev=None):
+        super().update(prev)
+        platform.attach(self)
+
     def binding(self, key, get, set):
         binding = self.bindings.get(key)
         if binding is None:
@@ -53,8 +58,7 @@ class Labelate(UI.Application):
 
     def notify(self):
         self.state.revision += 1
-        from _labelate_bridge import modified
-        modified(self.modified or any(self.object_by_id(k) and self.object_by_id(k)['content'] != v
+        platform.modified(self.modified or any(self.object_by_id(k) and self.object_by_id(k)['content'] != v
                                       for k, v in self.drafts.items()))
 
     def current(self):
@@ -175,10 +179,7 @@ class Labelate(UI.Application):
                     self.number(f'{label} ({unit})', display_length(obj.get(key, default), unit),
                                 lambda v, k=key: change(k, millimetres(v, unit)), key, minimum)
         if obj['type'] == 'text':
-            with UI.HBox():
-                UI.Label('Font file')
-                UI.TextField(self.binding(oid + ':font', lambda: obj.get('font', ''), lambda v: change('font', v)), placeholder='Default font').id('font')
-                self.button('Choose font…', self.browse_font)
+            platform.font_controls(self, obj, change)
             with UI.HBox():
                 self.number('Font size (pt)', obj.get('font_size', 12), lambda v: change('font_size', v), 'font-size', 1, 1000)
             with UI.HBox().id('typography-row'):
@@ -203,8 +204,7 @@ class Labelate(UI.Application):
     def set_draft(self, oid, value):
         # TextEdit publishes edits here without redrawing or committing on each key.
         self.drafts[oid] = value
-        from _labelate_bridge import modified
-        modified(True)
+        platform.modified(True)
 
     def commit_content(self):
         pending, self.drafts = self.drafts, {}
@@ -355,11 +355,6 @@ class Labelate(UI.Application):
         if path:
             self.apply_content(str(Path(path).resolve()))
 
-    def browse_font(self):
-        path = UI.OpenFile(title='Choose font', types={'Fonts': ['ttf', 'otf', 'ttc']})
-        if path:
-            self.set_object('font', str(Path(path).resolve()))
-
     def choose_color(self):
         value = UI.Prompt('Enter a color (e.g. #ff0000)', title='Text color', default=self.current().get('color', '#000000'))
         if value is not None:
@@ -389,6 +384,7 @@ class Labelate(UI.Application):
     def load_path(self, path):
         try:
             template, directory = open_document(path)
+            template = platform.prepare_template(template)
             self.template, self.project_dir = template, directory
             self.path, self.selected, self.modified = Path(path), None, False
             self.drafts.clear()
@@ -422,11 +418,8 @@ class Labelate(UI.Application):
         if not path:
             return False
         try:
-            document, assets = portable_document(self.template, self.project_dir)
-            # Write the exact allocated download path; changing its suffix breaks PUI's download registry.
-            Path(path).write_text(dumps(document), encoding='utf-8')
+            self.status = platform.save_document(self.template, path, self.project_dir)
             self.modified = False
-            self.status = 'JSON ready to download. Use Save ZIP to include referenced images and fonts.' if assets else 'JSON ready to download.'
             self.notify()
             return True
         except (OSError, ValueError) as exc:
@@ -441,7 +434,7 @@ class Labelate(UI.Application):
         try:
             write_package(path, self.template, self.project_dir)
             self.modified = False
-            self.status = 'Template ZIP ready to download, including referenced images and fonts.'
+            self.status = 'Template ZIP ready to download, including referenced images.'
             self.notify()
             return True
         except (OSError, ValueError) as exc:

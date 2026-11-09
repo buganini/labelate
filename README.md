@@ -1,7 +1,9 @@
 # Labelate
 
-A browser-based label template editor built with **QPUIQ 1.8**, **Pyodide**, and
-Pillow. Python runs in a browser worker; no application server is needed.
+A label template editor built with **QPUIQ 1.8** and Pillow, supporting a
+**PySide6 desktop app** and a **Pyodide browser build**. The desktop source imports
+PySide6 directly; the static build changes that import to Pyodide. There is no
+runtime backend selector. Browser Python runs in a worker without an app server.
 
 **Open the app: [https://buganini.github.io/labelate/](https://buganini.github.io/labelate/)**
 
@@ -21,7 +23,8 @@ Label, Objects, and Variables, in that order.
 - Add Text, Image, QR, Code128, or Rect. Select objects in the list or canvas and
   drag to position them. X/Y and W/H each share a row. Delete selected appears
   only when an object is selected. Later objects render over earlier objects.
-- Text content commits on blur. Font files, point size, normal/italic style,
+- Text content commits on blur. The desktop app allows choosing a font file;
+  the web app fixes the font to Noto Sans CJK TC. Point size, normal/italic style,
   normal/bold weight, and color in color mode are supported. Style and weight
   share a row. Italic uses a 12-degree slant; bold uses a proportional stroke.
   The color button opens a PUI prompt for a color name or hex value. Text clips
@@ -42,16 +45,16 @@ Label, Objects, and Variables, in that order.
 
 - **Open JSON / ZIP** imports a JSON template or a portable template ZIP.
 - **Open folder** imports a folder containing exactly one JSON template and its
-  images/fonts, preserving relative paths. A JSON file alone cannot grant the
+  images, preserving relative paths. A JSON file alone cannot grant the
   browser access to neighboring files: import the folder/ZIP or reselect assets.
 - **Save JSON** downloads JSON with relative file paths. It does not download
   assets; use Save ZIP to obtain a complete portable template.
-- **Save ZIP** downloads `label.json` plus referenced image and font files.
+- **Save ZIP** downloads `label.json` plus referenced image files.
   This preserves relative references without embedding image bytes in JSON.
 - **Export PNG** renders at the label's full dimensions/DPI and includes DPI
   metadata. The canvas preview is capped at 1024 × 1024 pixels.
 
-PUI presents a filename dialog, then a download notification. Click its Download
+In the browser, PUI presents a filename dialog, then a download notification. Click its Download
 button to save the result to your device. Saving always creates a download; the
 app cannot overwrite the file you originally selected. New/Open first ask about
 unsaved changes. A browser navigation warning is requested while edits are pending;
@@ -75,8 +78,8 @@ or `RGB` for color. Monochrome uses threshold 128 without dithering. Values over
 saved defaults and are converted to strings. Missing variables, invalid assets,
 and unrenderable codes raise `ValueError`. Relative paths in this string-only API
 resolve against the working directory; the editor resolves imported templates
-against their JSON directory. Custom fonts must be supplied for consistent
-cross-machine typography and CJK coverage.
+against their JSON directory. The browser always uses Noto Sans CJK TC, including when importing JSON with a
+custom font path. The standalone renderer still accepts explicit font paths.
 
 Version 1 JSON stores geometry in millimetres regardless of `canvas.unit`.
 Font size is in points. Object types are `text`, `image`, `qr`, `code128`, `rect`.
@@ -84,10 +87,27 @@ Image paths are stored in `content`, font paths in `font`. Text options are
 `font_style` and `font_weight`; rectangle options are `stroke_mm` and `radius_mm`.
 See [examples/product.json](examples/product.json) for a complete template.
 
-## Local build
+## Desktop app
 
-Python 3.12 and Node.js 22 are recommended. There is no desktop backend or
-runtime backend switch. `labelate.app` imports `PUI.pyodide` directly.
+```sh
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+python3 labelate
+# Or: python -m labelate
+```
+
+The desktop app uses PUI's PySide6 backend. Text objects have a font path field
+and a Choose font button. JSON saves reference images and fonts relative to the
+selected JSON destination; opening a template resolves those paths against its
+folder. File dialogs save directly to disk. ZIP exports bundle selected assets.
+
+## Local browser build
+
+Python 3.12 and Node.js 22 are recommended. The builder converts the single
+`import PUI.PySide6 as UI` in `labelate.app` to `import PUI.pyodide as UI` inside
+the generated archive and replaces `labelate.platform` with `web/platform.py`.
+The checked-in desktop source is never changed by the build.
 
 ```sh
 python3.12 -m venv .venv
@@ -99,11 +119,10 @@ git clone https://github.com/buganini/PUI.git .build/PUI
 git -C .build/PUI checkout 091c24f44916c5bf5796f0bb922380d3cddba1e4
 python scripts/build_pyodide.py
 npm run build
-python3 labelate
+python3 -m http.server 8868 --directory dist/pyodide
 ```
 
-Open [http://localhost:8868](http://localhost:8868). `python -m labelate` works too;
-both commands only serve the built static site. Do not open `index.html` with
+Open [http://localhost:8868](http://localhost:8868). Do not open `index.html` with
 `file://`. Deploy `dist/pyodide/` to any HTTPS static host, including a URL subpath.
 
 The Python builder pins the QPUIQ 1.8 source commit and packages only shared/Pyodide
@@ -122,7 +141,8 @@ npm run test:browser
 ```
 
 To use an existing Chrome installation locally, set `CHROME_PATH` to its executable.
-Python tests cover rendering, model validation, browser-backend bindings/lifecycle,
+Python tests cover rendering, model validation, desktop font selection/saving,
+browser-backend bindings/lifecycle,
 relative paths and safe ZIP imports. Playwright exercises the actual Pyodide app,
 content edits, image imports, and JSON/PNG/ZIP downloads.
 
@@ -138,3 +158,19 @@ pull requests never deploy. Repository Settings → Pages → Source must be
 GNU General Public License version 3 only (`GPL-3.0-only`); see [LICENSE](LICENSE).
 The static site includes PUI's MIT license, and the Python archive retains the
 licenses and metadata from bundled dependencies.
+
+## Default font
+
+The web editor fixes text rendering to **Noto Sans CJK TC Regular 2.004**, with
+no font selector. It covers common Traditional/Simplified Chinese, Japanese,
+Korean, and Latin characters, but not every Unicode code point or emoji.
+
+- [Noto CJK project](https://github.com/notofonts/noto-cjk)
+- [Pinned font download](https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf)
+- [SIL Open Font License](https://github.com/notofonts/noto-cjk/blob/Sans2.004/LICENSE)
+
+Font binaries are **not checked into this repository**. The build downloads the
+font and license into ignored `.build/fonts/`, verifies their SHA-256 hashes,
+and includes them in the browser archive. This adds about 16 MB before ZIP
+compression. Source-only Python usage can pass a font path explicitly; without
+the built font, the renderer retains its platform/Pillow fallback.

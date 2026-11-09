@@ -12,7 +12,9 @@ test('browser boots, edits, drags and downloads JSON/PNG/ZIP', async ({page}) =>
   await page.getByRole('button', {name:'Text',exact:true}).click();
   const content = page.locator('textarea:not([readonly])');
   await expect(content).toHaveValue('Hello {name}');
-  await content.fill('Hello {customer}');
+  await expect(page.getByText('Noto Sans CJK TC',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Choose font…'})).toHaveCount(0);
+  await content.fill('標籤 {customer}');
   await content.press('Tab');
   await expect(page.getByText('customer',{exact:true})).toBeVisible();
   const customer = page.locator('.pui-HBox').filter({has:page.getByText('customer',{exact:true})}).last().locator('input');
@@ -36,7 +38,7 @@ test('browser boots, edits, drags and downloads JSON/PNG/ZIP', async ({page}) =>
   console.log('JSON downloaded');
   const json = JSON.parse(await readFile(await download.path(),'utf8'));
   expect(json.canvas.dpi).toBe(300);
-  expect(json.objects[0].content).toBe('Hello {customer}');
+  expect(json.objects[0].content).toBe('標籤 {customer}');
   expect(json.variables.customer).toBe('Ada');
   expect(json.objects[0].x_mm).toBeCloseTo(10,0);
   expect(json.objects[0].y_mm).toBeCloseTo(12,0);

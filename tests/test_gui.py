@@ -7,8 +7,10 @@ import PUI.pyodide as UI
 from PUI.pyodide.runtime import Runtime
 from PIL import Image
 
-from labelate.app import Labelate
-from labelate.model import loads
+from pathlib import Path
+from types import ModuleType
+from scripts.build_pyodide import browser_source
+from labelate.model import loads, dumps
 
 
 def nodes(root):
@@ -18,6 +20,19 @@ def nodes(root):
 
 
 def test_browser_app(tmp_path, monkeypatch):
+    # Exercise exactly the sources placed in the browser archive, in an isolated package.
+    root = Path(__file__).resolve().parents[1] / 'labelate'
+    package = ModuleType('labelate_web_test')
+    package.__path__ = [str(root)]
+    monkeypatch.setitem(sys.modules, package.__name__, package)
+    for name in ('platform', 'app'):
+        module = ModuleType(package.__name__ + '.' + name)
+        module.__package__ = package.__name__
+        module.__file__ = str(root / (name + '.py'))
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+        exec(compile(browser_source(root / (name + '.py')), module.__file__, 'exec'), module.__dict__)
+        setattr(package, name, module)
+    Labelate = package.app.Labelate
     monkeypatch.setitem(sys.modules, '_labelate_bridge', SimpleNamespace(modified=lambda value: None))
     monkeypatch.setattr(UI, 'Confirm', lambda *args, **kwargs: False)
     async def scenario():
@@ -40,6 +55,12 @@ def test_browser_app(tmp_path, monkeypatch):
             monkeypatch.setattr(UI, 'SaveFile', lambda **kwargs: str(download))
             assert app.save()
             assert loads(download.read_text())['objects'][0]['content'] == 'Pending {customer}'
+            legacy = loads(download.read_text())
+            legacy['objects'][0]['font'] = '/missing/custom.ttf'
+            download.write_text(dumps(legacy))
+            app.load_path(download)
+            assert app.template['objects'][0]['font'] == ''
+            app.select_object(oid)
             app.set_variable('customer', 'Ada')
             app.set_unit('cm')
             app.set_object('font_style', 'italic')
