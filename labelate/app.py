@@ -1,15 +1,15 @@
 """Declarative QPUIQ editor, including its canvas and input controls."""
-import copy
 import math
-import os
+import zipfile
 from pathlib import Path
 
-import PUI.PySide6 as UI
-from PIL import Image, ImageDraw
+import PUI.pyodide as UI
+from PIL import Image, ImageDraw, ImageColor
 
 from .model import (new_template, new_object, variable_names, reconcile_variables,
-                    loads, dumps, display_length, millimetres, LABEL_PRESETS, UNIT_MM)
+                    dumps, display_length, millimetres, LABEL_PRESETS, UNIT_MM)
 from .renderer import render, object_image, pixels
+from .template_io import open_document, portable_document, write_package
 
 
 class Binding:
@@ -38,18 +38,24 @@ class Labelate(UI.Application):
         self.viewport = (0, 0, 1)
         self.preview = None
         self.status = ''
-        self.close_guard = None
+        self.project_dir = None
+        self.bindings = {}
+        self.binding_scope = "label"
         self.refresh_preview()
 
-    def update(self, prev=None):
-        super().update(prev)
-        if self.close_guard is None:
-            from .native import CloseGuard
-            self.close_guard = CloseGuard(self)
-            self.ui.installEventFilter(self.close_guard)
+    def binding(self, key, get, set):
+        binding = self.bindings.get(key)
+        if binding is None:
+            binding = self.bindings[key] = Binding(get, set)
+        else:
+            binding.get, binding.set = get, set
+        return binding
 
     def notify(self):
         self.state.revision += 1
+        from _labelate_bridge import modified
+        modified(self.modified or any(self.object_by_id(k) and self.object_by_id(k)['content'] != v
+                                      for k, v in self.drafts.items()))
 
     def current(self):
         return self.object_by_id(self.selected)
@@ -62,7 +68,7 @@ class Labelate(UI.Application):
 
     def select(self, label, choices, value, setter, key):
         UI.Label(label)
-        with UI.ComboBox(text_model=Binding(lambda: value, setter)).id(key):
+        with UI.ComboBox(text_model=self.binding(self.binding_scope + ':' + key, lambda: value, setter)).id(key):
             for choice in choices:
                 UI.ComboBoxItem(choice)
 
@@ -77,15 +83,15 @@ class Labelate(UI.Application):
             except ValueError as exc:
                 self.status = str(exc)
                 self.notify()
-        return UI.TextField(Binding(lambda: f'{value:.3f}'.rstrip('0').rstrip('.'), commit)).id(key).layout(minWidth=48)
+        return UI.TextField(self.binding(self.binding_scope + ':' + key, lambda: f'{value:.3f}'.rstrip('0').rstrip('.'), commit)).id(key).layout(minWidth=48)
 
     def content(self):
         _ = self.state.revision
         with UI.Window(title='Labelate — Label Template Editor', size=(1280, 800)).id('window'):
             with UI.VBox().layout(padding=10):
                 with UI.HBox().id('toolbar'):
-                    for title, action in [('New', self.new), ('Open JSON', self.open), ('Save', self.save),
-                                          ('Save as', lambda: self.save(True)), ('Export PNG', self.export)]:
+                    for title, action in [('New', self.new), ('Open JSON / ZIP', self.open), ('Open folder', self.open_folder),
+                                          ('Save JSON', self.save), ('Save ZIP', self.save_package), ('Export PNG', self.export)]:
                         self.button(title, action)
                     UI.Spacer()
                 with UI.Splitter().id('workspace'):
@@ -101,6 +107,7 @@ class Labelate(UI.Application):
                 UI.Label(self.status).id('status')
 
     def label_panel(self):
+        self.binding_scope = 'label'
         canvas = self.template['canvas']
         unit = canvas['unit']
         UI.Label('Label').style(fontWeight=700)
@@ -140,6 +147,7 @@ class Labelate(UI.Application):
 
     def object_properties(self, obj):
         unit, oid = self.template['canvas']['unit'], obj['id']
+        self.binding_scope = oid
         def change(key, value):
             self.set_object(key, value, oid)
         with UI.HBox():
@@ -154,12 +162,12 @@ class Labelate(UI.Application):
                         lambda v: change('height_mm', millimetres(v, unit)), 'height_mm', .001)
         if obj['type'] == 'image':
             UI.Label('Image file')
-            UI.TextEdit(UI.DummyBinding(obj['content']), readonly=True).id('image-path').layout(height=50)
+            UI.TextEdit(self.binding(oid + ':image-path', lambda: obj['content'], lambda v: None), readonly=True).id('image-path').layout(height=50)
             self.button('Choose image…', self.browse_image)
         elif obj['type'] != 'rect':
             UI.Label('Content')
-            binding = Binding(lambda: obj['content'], lambda v: self.apply_content(v, oid))
-            draft = Binding(lambda: self.drafts.get(oid, obj['content']), lambda v: self.set_draft(oid, v))
+            binding = self.binding(oid + ':content', lambda: obj['content'], lambda v: self.apply_content(v, oid))
+            draft = self.binding(oid + ':draft', lambda: self.drafts.get(oid, obj['content']), lambda v: self.set_draft(oid, v))
             UI.TextEdit(binding, edit_model=draft).id('content-' + oid).layout(height=90)
         if obj['type'] == 'rect':
             with UI.HBox():
@@ -169,7 +177,7 @@ class Labelate(UI.Application):
         if obj['type'] == 'text':
             with UI.HBox():
                 UI.Label('Font file')
-                UI.TextField(Binding(lambda: obj.get('font', ''), lambda v: change('font', v)), placeholder='Default font').id('font')
+                UI.TextField(self.binding(oid + ':font', lambda: obj.get('font', ''), lambda v: change('font', v)), placeholder='Default font').id('font')
                 self.button('Choose font…', self.browse_font)
             with UI.HBox():
                 self.number('Font size (pt)', obj.get('font_size', 12), lambda v: change('font_size', v), 'font-size', 1, 1000)
@@ -187,7 +195,7 @@ class Labelate(UI.Application):
         for name in names:
             with UI.HBox().id('variable-' + name):
                 UI.Label(name)
-                UI.TextField(Binding(lambda k=name: str(self.template['variables'].get(k, '')),
+                UI.TextField(self.binding('variable:' + name, lambda k=name: str(self.template['variables'].get(k, '')),
                                      lambda v, k=name: self.set_variable(k, v))).id(name)
         if not names:
             UI.Label('Use {name} in object content.')
@@ -195,6 +203,8 @@ class Labelate(UI.Application):
     def set_draft(self, oid, value):
         # TextEdit publishes edits here without redrawing or committing on each key.
         self.drafts[oid] = value
+        from _labelate_bridge import modified
+        modified(True)
 
     def commit_content(self):
         pending, self.drafts = self.drafts, {}
@@ -351,10 +361,13 @@ class Labelate(UI.Application):
             self.set_object('font', str(Path(path).resolve()))
 
     def choose_color(self):
-        from .native import choose_color
-        color = choose_color(self.current().get('color', '#000000'))
-        if color:
-            self.set_object('color', color)
+        value = UI.Prompt('Enter a color (e.g. #ff0000)', title='Text color', default=self.current().get('color', '#000000'))
+        if value is not None:
+            try:
+                ImageColor.getrgb(value)
+                self.set_object('color', value)
+            except ValueError:
+                UI.Warning('Enter a valid color name or hex value.', title='Invalid color')
 
     def confirm_discard(self):
         self.commit_content()
@@ -368,47 +381,71 @@ class Labelate(UI.Application):
         if self.confirm_discard():
             self.template, self.path, self.selected, self.modified = new_template(), None, None, False
             self.drafts.clear()
+            self.bindings.clear()
+            self.project_dir = None
             self.refresh_preview()
             self.notify()
+
+    def load_path(self, path):
+        try:
+            template, directory = open_document(path)
+            self.template, self.project_dir = template, directory
+            self.path, self.selected, self.modified = Path(path), None, False
+            self.drafts.clear()
+            self.bindings.clear()
+            self.refresh_preview()
+            self.notify()
+        except (OSError, ValueError, zipfile.BadZipFile) as exc:
+            UI.Warning(str(exc), title='Open error')
 
     def open(self):
         if not self.confirm_discard():
             return
-        path = UI.OpenFile(title='Open template', types=['json'])
+        path = UI.OpenFile(title='Open template', types=['json', 'zip'])
         if path:
-            try:
-                template = loads(Path(path).read_text(encoding='utf-8'))
-                for obj in template['objects']:
-                    if obj['type'] == 'image' and obj['content']:
-                        obj['content'] = str((Path(path).resolve().parent / Path(obj['content']).expanduser()).resolve())
-                self.template, self.path, self.selected, self.modified = template, Path(path), None, False
-                self.drafts.clear()
-                self.refresh_preview()
-                self.notify()
-            except (OSError, ValueError) as exc:
-                UI.Warning(str(exc), title='Open error')
+            self.load_path(path)
 
-    def save(self, save_as=False):
+    def open_folder(self):
+        if not self.confirm_discard():
+            return
+        folder = UI.OpenDirectory(title='Open template folder')
+        if folder:
+            candidates = sorted(Path(folder).rglob('*.json'))
+            if len(candidates) != 1:
+                UI.Warning('Choose a folder containing exactly one JSON template and its assets.', title='Open folder')
+            else:
+                self.load_path(candidates[0])
+
+    def save(self):
         self.commit_content()
-        path = self.path
-        if path is None or save_as:
-            name = UI.SaveFile(default=str(path or 'label.json'), title='Save template', types=['json'])
-            if not name:
-                return False
-            path = Path(name).with_suffix('.json')
+        path = UI.SaveFile(default='label.json', title='Save JSON', types=['json'])
+        if not path:
+            return False
         try:
-            reconcile_variables(self.template)
-            saved = copy.deepcopy(self.template)
-            for obj in saved['objects']:
-                if obj['type'] == 'image' and obj['content']:
-                    obj['content'] = os.path.relpath(Path(obj['content']).expanduser().resolve(), path.resolve().parent)
-            path.write_text(dumps(saved), encoding='utf-8')
-            self.path, self.modified = path, False
-            self.status = f'Saved {path}'
+            document, assets = portable_document(self.template, self.project_dir)
+            # Write the exact allocated download path; changing its suffix breaks PUI's download registry.
+            Path(path).write_text(dumps(document), encoding='utf-8')
+            self.modified = False
+            self.status = 'JSON ready to download. Use Save ZIP to include referenced images and fonts.' if assets else 'JSON ready to download.'
             self.notify()
             return True
         except (OSError, ValueError) as exc:
             UI.Warning(str(exc), title='Save error')
+            return False
+
+    def save_package(self):
+        self.commit_content()
+        path = UI.SaveFile(default='label.zip', title='Save ZIP', types=['zip'])
+        if not path:
+            return False
+        try:
+            write_package(path, self.template, self.project_dir)
+            self.modified = False
+            self.status = 'Template ZIP ready to download, including referenced images and fonts.'
+            self.notify()
+            return True
+        except (OSError, ValueError) as exc:
+            UI.Warning(str(exc), title='ZIP export error')
             return False
 
     def export(self):
@@ -417,7 +454,7 @@ class Labelate(UI.Application):
             image = render(dumps(self.template), {})
             path = UI.SaveFile(default='label.png', title='Export PNG', types=['png'])
             if path:
-                image.save(Path(path).with_suffix('.png'), dpi=image.info['dpi'])
+                image.save(path, format='PNG', dpi=image.info['dpi'])
                 self.status = f'Exported {path}'
                 self.notify()
         except (OSError, ValueError) as exc:
@@ -425,4 +462,4 @@ class Labelate(UI.Application):
 
 
 def main():
-    Labelate().run()
+    return Labelate().start()

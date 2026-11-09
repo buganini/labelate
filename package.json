@@ -1,0 +1,13 @@
+{
+  "name": "labelate-web-build",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-web.mjs",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "@playwright/test": "1.58.2"
+  }
+}

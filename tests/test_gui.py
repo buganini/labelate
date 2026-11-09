@@ -1,10 +1,12 @@
-import os
-os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+"""Browser backend model/lifecycle tests; real DOM interactions live in web.spec.mjs."""
+import asyncio
+import sys
+from types import SimpleNamespace
 
-import pytest
+import PUI.pyodide as UI
+from PUI.pyodide.runtime import Runtime
 from PIL import Image
-from PySide6 import QtCore as C, QtGui as G, QtTest
-import PUI.PySide6 as UI
+
 from labelate.app import Labelate
 from labelate.model import loads
 
@@ -15,103 +17,68 @@ def nodes(root):
         yield from nodes(child)
 
 
-def find(app, cls, key=None):
-    return next(n for n in nodes(app) if isinstance(n, cls) and (key is None or n.key.endswith('#id=' + key)))
-
-
-def flush(app):
-    for _ in range(3):
-        app.ui.processEvents()
-
-
-def test_declarative_editor(tmp_path, monkeypatch, capsys):
+def test_browser_app(tmp_path, monkeypatch):
+    monkeypatch.setitem(sys.modules, '_labelate_bridge', SimpleNamespace(modified=lambda value: None))
     monkeypatch.setattr(UI, 'Confirm', lambda *args, **kwargs: False)
-    app = Labelate()
-    app.sync()
-    flush(app)
-    assert find(app, UI.Canvas)
-    assert find(app, UI.ComboBox, 'unit')
-    assert not any(isinstance(n, UI.Button) and n.text == 'Delete selected' for n in nodes(app))
-    find(app, UI.Button, 'Text').ui.click()
-    flush(app)
-    first = app.current()
-    content = find(app, UI.TextEdit, 'content-' + first['id'])
-    content.ui.setFocus()
-    content.ui.selectAll()
-    content.ui.insertPlainText('Hello {customer}')
-    content.ui.focusOutEvent(G.QFocusEvent(C.QEvent.Type.FocusOut))
-    flush(app)
-    assert first['content'] == 'Hello {customer}'
-    app.set_variable('customer', 'Ada')
-    flush(app)
-    find(app, UI.ComboBox, 'unit').ui.setCurrentText('cm')
-    flush(app)
-    assert app.template['canvas']['unit'] == 'cm'
-    assert app.template['canvas']['width_mm'] == 100
-    width = find(app, UI.TextField, 'width_mm')
-    # Both label and object width fields exist: use the one in dimensions-row.
-    width = next(n for n in nodes(app) if isinstance(n, UI.TextField) and n.key.endswith('#id=width_mm') and n.model.value == '10')
-    width.ui.setText('12')
-    width.ui.editingFinished.emit()
-    flush(app)
-    assert app.template['canvas']['width_mm'] == 120
-    find(app, UI.ComboBox, 'style').ui.setCurrentText('italic')
-    find(app, UI.ComboBox, 'weight').ui.setCurrentText('bold')
-    flush(app)
-    assert first['font_style'] == 'italic'
-    assert first['font_weight'] == 'bold'
-    canvas = find(app, UI.Canvas).ui
-    assert canvas.grab().toImage().pixelColor(0, 0).name() == '#000000'
-    x, y, scale = app.viewport
-    start = C.QPoint(round(x + 6*scale), round(y + 6*scale))
-    end = start + C.QPoint(round(5*scale), round(7*scale))
-    QtTest.QTest.mousePress(canvas, C.Qt.MouseButton.LeftButton, pos=start)
-    QtTest.QTest.mouseMove(canvas, end)
-    QtTest.QTest.mouseRelease(canvas, C.Qt.MouseButton.LeftButton, pos=end)
-    flush(app)
-    assert first['x_mm'] == pytest.approx(10, abs=.2)
-    assert first['y_mm'] == pytest.approx(12, abs=.2)
-    find(app, UI.Button, 'Delete selected').ui.click()
-    flush(app)
-    assert app.template['objects'] == []
-    assert app.template['variables'] == {}
-    asset = tmp_path / 'image.png'
-    Image.new('RGB', (10, 10), 'red').save(asset)
-    app.add('image')
-    flush(app)
-    assert find(app, UI.TextEdit, 'image-path').readonly
-    assert not any(isinstance(n, UI.TextEdit) and not n.readonly for n in nodes(app))
-    monkeypatch.setattr(UI, 'OpenFile', lambda **kwargs: str(asset))
-    app.browse_image()
-    folder = tmp_path / 'templates'
-    folder.mkdir()
-    app.path = folder / 'label.json'
-    assert app.save()
-    assert loads(app.path.read_text())['objects'][0]['content'] == '../image.png'
-    assert not app.modified
-    monkeypatch.setattr(UI, 'OpenFile', lambda **kwargs: str(folder / 'label.json'))
-    app.open()
-    assert app.template['objects'][0]['content'] == str(asset)
-    monkeypatch.setattr(UI, 'SaveFile', lambda **kwargs: str(tmp_path / 'copy.json'))
-    assert app.save(True)
-    assert loads(app.path.read_text())['objects'][0]['content'] == 'image.png'
-    # Saving while content is still focused must commit the draft.
-    app.add('text')
-    flush(app)
-    text_id = app.selected
-    field = find(app, UI.TextEdit, 'content-' + text_id).ui
-    field.selectAll()
-    field.insertPlainText('Pending {order}')
-    assert app.save()
-    assert loads(app.path.read_text())['objects'][-1]['content'] == 'Pending {order}'
-    app.add('rect')
-    app.set_object('radius_mm', 2)
-    flush(app)
-    assert find(app, UI.TextField, 'radius_mm')
-    app.modified = False
-    app.drafts.clear()
-    find(app, UI.Window).ui.close()
-    flush(app)
-    output = capsys.readouterr()
-    assert 'Traceback' not in output.err + output.out
-    assert '<ERROR' not in output.err + output.out
+    async def scenario():
+        runtime = Runtime(asyncio.get_running_loop(), lambda m: None, epoch='test', build='test')
+        app = Labelate()
+        app.start()
+        async def settle():
+            for _ in range(6):
+                await asyncio.sleep(0)
+        try:
+            await settle()
+            assert any(isinstance(n, UI.Canvas) for n in nodes(app))
+            app.add('text')
+            await settle()
+            oid = app.selected
+            field = next(n for n in nodes(app) if isinstance(n, UI.TextEdit) and not n.readonly)
+            field.edit_model.value = 'Pending {customer}'
+            assert app.current()['content'] != 'Pending {customer}'
+            download = tmp_path / 'download-without-extension'
+            monkeypatch.setattr(UI, 'SaveFile', lambda **kwargs: str(download))
+            assert app.save()
+            assert loads(download.read_text())['objects'][0]['content'] == 'Pending {customer}'
+            app.set_variable('customer', 'Ada')
+            app.set_unit('cm')
+            app.set_object('font_style', 'italic')
+            app.set_object('font_weight', 'bold')
+            await settle()
+            assert app.template['canvas']['width_mm'] == 100
+            field = next(n for n in nodes(app) if isinstance(n, UI.TextEdit) and not n.readonly)
+            old_binding = field.model
+            app.set_variable('customer', 'Bob')
+            await settle()
+            field = next(n for n in nodes(app) if isinstance(n, UI.TextEdit) and not n.readonly)
+            assert field.model is old_binding
+            assert app.object_by_id(oid)['font_weight'] == 'bold'
+            app.viewport = (0, 0, 10)
+            app.pointer_down(SimpleNamespace(button=1, x=60, y=60))
+            app.pointer_move(SimpleNamespace(x=110, y=130))
+            app.pointer_up(SimpleNamespace())
+            assert app.current()['x_mm'] == 10
+            assert app.current()['y_mm'] == 12
+            app.delete()
+            assert app.template['variables'] == {}
+            asset = tmp_path / 'red.png'
+            Image.new('RGB', (20, 20), 'red').save(asset)
+            app.add('image')
+            monkeypatch.setattr(UI, 'OpenFile', lambda **kwargs: str(asset))
+            app.browse_image()
+            await settle()
+            assert all(n.readonly for n in nodes(app) if isinstance(n, UI.TextEdit))
+            package = tmp_path / 'label.zip'
+            monkeypatch.setattr(UI, 'SaveFile', lambda **kwargs: str(package))
+            assert app.save_package()
+            app.load_path(package)
+            assert app.preview.getbbox()
+            app.add('rect')
+            app.set_object('radius_mm', 2)
+            await settle()
+            runtime.snapshot()  # Binding values and serialized canvas props must be valid.
+            assert not runtime.task.done()
+        finally:
+            app.quit()
+            await asyncio.wait_for(runtime.task, 2)
+    asyncio.run(scenario())
