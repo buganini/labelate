@@ -76,8 +76,9 @@ image = render(lbl_bytes, {'name': 'Coffee', 'sku': 'ABC123'})
 image.save('label.png', dpi=image.info['dpi'])
 ```
 
-`render(lbl_bytes, variables)` returns `PIL.Image.Image`: mode `1` for monochrome
-or `RGB` for color. Monochrome uses threshold 128 without dithering. Values override
+`render(lbl_bytes, variables)` returns `PIL.Image.Image`: mode `L` (8-bit greyscale)
+or `RGB` for color. Greyscale preserves intermediate tones without thresholding.
+Older templates using `mono` are loaded as `greyscale`. Values override
 saved defaults and are converted to strings. Missing variables, invalid assets,
 and unrenderable codes raise `ValueError`. Image bytes are decoded directly.
 Relative font paths in this API resolve against the working directory; the editor

@@ -361,7 +361,7 @@ class Labelate(UI.Application):
                         self.set_rotation, 'rotation')
         with UI.HBox().id('output-row'):
             self.number('DPI', canvas['dpi'], lambda v: self.set_canvas('dpi', round(v)), 'dpi', 36, 2400)
-            self.select('Mode', ['mono', 'color'], canvas['mode'], lambda v: self.set_canvas('mode', v), 'mode')
+            self.select('Mode', ['greyscale', 'color'], canvas['mode'], lambda v: self.set_canvas('mode', v), 'mode')
 
     def objects_panel(self):
         UI.Label('Objects').style(fontWeight=700)
@@ -533,8 +533,8 @@ class Labelate(UI.Application):
                 tile = Image.new('RGBA', (pixels(obj['width_mm'], canvas['dpi']), pixels(obj['height_mm'], canvas['dpi'])), '#ffe4e6')
                 ImageDraw.Draw(tile).rectangle((0, 0, tile.width-1, tile.height-1), outline='red', width=2)
             result.alpha_composite(tile, (round(obj['x_mm'] * canvas['dpi'] / 25.4), round(obj['y_mm'] * canvas['dpi'] / 25.4)))
-        if canvas['mode'] == 'mono' and not errors:
-            result = result.convert('L').point(lambda v: 255 if v >= 128 else 0).convert('RGBA')
+        if canvas['mode'] == 'greyscale' and not errors:
+            result = result.convert('L').convert('RGBA')
         result = result.rotate(-canvas.get('rotation', 0), expand=True)
         result.thumbnail((1024, 1024), Image.Resampling.NEAREST)
         self.preview = result

@@ -61,6 +61,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await page.getByRole('button',{name:'Dismiss label.lbl',exact:true}).click();
   const json = decode(await readFile(await download.path()));
   expect(json.canvas.dpi).toBe(300);
+  expect(json.canvas.mode).toBe('greyscale');
   expect(json.canvas.rotation).toBe(90);
   expect([json.canvas.width_mm,json.canvas.height_mm]).toEqual([100,60]);
   expect(json.data_rows).toEqual([{customer:'Bob'}]);
@@ -98,6 +99,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   const png=await readFile(await (await pngPromise).path());
   expect(png.subarray(1,4).toString()).toBe('PNG');
   expect([png.readUInt32BE(16),png.readUInt32BE(20)]).toEqual([1181,709]);
+  expect([png[24],png[25]]).toEqual([8,0]); // 8-bit greyscale PNG
   console.log('PNG downloaded');
   await page.getByRole('button', {name:'Save .lbl',exact:true}).click();
   await page.getByRole('dialog').getByRole('button', {name:'Download',exact:true}).click();

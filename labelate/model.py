@@ -19,7 +19,7 @@ LABEL_PRESETS = {
 
 def new_template():
     return {"version": 2, "canvas": {"width_mm": 100, "height_mm": 60,
-            "dpi": 300, "mode": "mono", "unit": "mm", "rotation": 0}, "objects": [], "variables": {}, "data_rows": []}
+            "dpi": 300, "mode": "greyscale", "unit": "mm", "rotation": 0}, "objects": [], "variables": {}, "data_rows": []}
 
 
 def new_object(kind):
@@ -71,7 +71,7 @@ def validate(template):
         canvas = template["canvas"]
         for key in ("width_mm", "height_mm", "dpi"):
             positive(canvas[key], key)
-        if canvas["mode"] not in ("mono", "color") or canvas["unit"] not in UNIT_MM:
+        if canvas["mode"] not in ("greyscale", "color") or canvas["unit"] not in UNIT_MM:
             raise ValueError("Invalid canvas mode or unit")
         rotation = canvas.get('rotation', 0)
         if type(rotation) is not int or rotation not in (0, 90, 180, 270):
@@ -125,7 +125,11 @@ def loads(source):
     if len(source) > 128 * 1024 * 1024:
         raise ValueError('Template exceeds 128 MiB')
     try:
-        return validate(msgpack.unpackb(source, raw=False, strict_map_key=True))
+        template = msgpack.unpackb(source, raw=False, strict_map_key=True)
+        if isinstance(template, dict) and isinstance(template.get('canvas'), dict):
+            if template['canvas'].get('mode') == 'mono':
+                template['canvas']['mode'] = 'greyscale'
+        return validate(template)
     except (ValueError, TypeError, msgpack.exceptions.UnpackException) as exc:
         raise ValueError(f'Invalid .lbl template: {exc}') from exc
 

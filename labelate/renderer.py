@@ -98,7 +98,7 @@ def object_image(obj, canvas, values):
 
 
 def render(lbl_bytes, variables):
-    """Render a v2 MessagePack template to RGB or 1-bit PIL.Image.Image.
+    """Render a v2 MessagePack template to RGB or 8-bit greyscale PIL.Image.Image.
 
     Explicit variables override template defaults. Missing variables, invalid
     assets and unrenderable barcodes raise ValueError with object context.
@@ -118,7 +118,7 @@ def render(lbl_bytes, variables):
         except Exception as exc:
             raise ValueError(f"Object {obj['id']} ({obj['type']}): {exc}") from exc
     result = result.convert("RGB")
-    if canvas["mode"] == "mono":
-        result = result.convert("L").point(lambda value: 255 if value >= 128 else 0, mode="1")
+    if canvas["mode"] == "greyscale":
+        result = result.convert("L")
     result.info["dpi"] = (canvas["dpi"], canvas["dpi"])
     return result

@@ -13,7 +13,7 @@ def test_units_and_dimensions(unit):
     template['canvas'].update(width_mm=25.4, height_mm=50.8, dpi=300, unit=unit)
     image = render(dumps(template), {})
     assert image.size == (300, 600)
-    assert image.mode == '1'
+    assert image.mode == 'L'
     assert millimetres(display_length(123.456, unit), unit) == pytest.approx(123.456)
     assert display_length(100, 'cm') == 10
     assert millimetres(10, 'cm') == 100
@@ -54,7 +54,7 @@ def test_all_objects_and_override(tmp_path):
     assert render(dumps(template), values).tobytes() == result.tobytes()
 
 
-def test_image_path_and_mono(tmp_path):
+def test_image_bytes_and_greyscale(tmp_path):
     path = tmp_path / 'black.png'
     Image.new('RGB', (5, 5), 'black').save(path)
     template = new_template()
@@ -63,7 +63,7 @@ def test_image_path_and_mono(tmp_path):
     path.unlink()
     template['objects'].append(obj)
     image = render(dumps(template), {})
-    assert image.mode == '1'
+    assert image.mode == 'L'
     assert image.getextrema() == (0, 255)
 
 
@@ -141,7 +141,7 @@ def test_multiline_text_has_multiple_ink_rows(style, weight):
     template['objects'] = [obj]
     template['variables'] = {'name': 'Ada'}
     image = render(dumps(template), {})
-    assert image.mode == '1'
+    assert image.mode == 'L'
     tile = object_image(obj, template['canvas'], template['variables'])
     alpha = tile.getchannel('A')
     occupied = [alpha.crop((0, y, alpha.width, y + 1)).getbbox() is not None for y in range(alpha.height)]
@@ -180,3 +180,24 @@ def test_invalid_rotation(angle):
     template['canvas']['rotation'] = angle
     with pytest.raises(ValueError, match='Rotation'):
         dumps(template)
+
+
+def test_greyscale_retains_intermediate_tones_and_legacy_mode():
+    from io import BytesIO
+    import msgpack
+    template = new_template()
+    template['canvas'].update(width_mm=4, height_mm=1, dpi=25.4)
+    image = Image.new('L', (4, 1))
+    image.putdata([0, 64, 192, 255])
+    buffer = BytesIO()
+    image.save(buffer, format='PNG')
+    obj = new_object('image')
+    obj.update(x_mm=0, y_mm=0, width_mm=4, height_mm=1, data=buffer.getvalue())
+    template['objects'] = [obj]
+    output = render(dumps(template), {})
+    assert output.mode == 'L'
+    assert output.tobytes() == bytes([0, 64, 192, 255])
+    template['canvas']['mode'] = 'mono'
+    legacy = msgpack.packb(template, use_bin_type=True)
+    assert loads(legacy)['canvas']['mode'] == 'greyscale'
+    assert render(legacy, {}).tobytes() == output.tobytes()
