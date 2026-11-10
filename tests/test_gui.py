@@ -83,12 +83,14 @@ def test_browser_app(tmp_path, monkeypatch):
             from labelate import render
             from PIL import Image
             original = render(dumps(app.snapshot()), {})
-            for angle, start, end in [(0, (60,60), (110,130)), (90, (540,60), (470,110)),
-                                      (180, (940,540), (890,470)), (270, (60,940), (130,890))]:
+            for angle in (0, 90, 180, 270):
+                start, end = (60, 60), (110, 130)
                 app.set_object('x_mm', 5)
                 app.set_object('y_mm', 5)
                 app.set_rotation(str(angle))
-                expected = original.convert('RGBA').rotate(-angle, expand=True)
+                dimensions = original.size[::-1] if angle in (90, 270) else original.size
+                expected = Image.new('RGBA', dimensions, 'white')
+                expected.alpha_composite(original.convert('RGBA'))
                 expected.thumbnail((1024, 1024), Image.Resampling.NEAREST)
                 assert app.preview.size == expected.size
                 assert app.preview.tobytes() == expected.tobytes()

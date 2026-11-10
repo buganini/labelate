@@ -43,7 +43,7 @@ def test_all_objects_and_override(tmp_path):
         obj.update(content={'text': '{name}', 'image': '{asset}', 'qr': '{url}', 'code128': '{sku}'}[kind],
                    x_mm=1, y_mm=i * 14, width_mm=80, height_mm=12)
         if kind == 'image':
-            obj.update(content='', data=asset.read_bytes(), image_name=asset.name)
+            obj.update(content='', data=asset.read_bytes())
         template['objects'].append(obj)
     values = {'name': 'Test', 'asset': str(asset), 'url': 'abc', 'sku': '12345'}
     result = render(dumps(template), values)
@@ -151,7 +151,7 @@ def test_multiline_text_has_multiple_ink_rows(style, weight):
 
 
 @pytest.mark.parametrize('angle', [0, 90, 180, 270])
-def test_rotation_preserves_native_output(angle):
+def test_rotation_restores_native_dimensions(angle):
     from labelate.geometry import view_box, view_size, to_view, from_view
     template = new_template()
     template['canvas'].update(width_mm=40, height_mm=20, dpi=254)
@@ -164,11 +164,16 @@ def test_rotation_preserves_native_output(angle):
     assert restored['canvas']['rotation'] == angle
     image = render(dumps(restored), {})
     assert image.size == (400, 200)
-    assert image.tobytes() == baseline.tobytes()
+    oriented = loads(dumps(restored))
+    if angle in (90, 270):
+        oriented["canvas"]["width_mm"], oriented["canvas"]["height_mm"] = 20, 40
+    oriented["canvas"]["rotation"] = 0
+    expected = render(dumps(oriented), {}).rotate(-angle, expand=True)
+    assert image.tobytes() == expected.tobytes()
     canvas = template['canvas']
     assert view_size(canvas) == ((20,40) if angle in (90,270) else (40,20))
-    expected = {0:(3,2,13,7), 90:(13,3,18,13), 180:(27,13,37,18), 270:(2,27,7,37)}
-    assert view_box(obj, canvas) == expected[angle]
+    assert view_box(obj, canvas) == (3, 2, 13, 7)
+    assert to_view(7, 4, canvas) == (7, 4)
     assert from_view(*to_view(7, 4, canvas), canvas) == (7, 4)
     del canvas['rotation']
     assert render(dumps(template), {}).tobytes() == baseline.tobytes()

@@ -15,7 +15,7 @@ def test_binary_image_roundtrip_without_source(tmp_path):
     raw = data.getvalue()
     template = new_template()
     obj = new_object('image')
-    obj.update(data=raw, image_name='no-extension')
+    obj.update(data=raw)
     template['objects'] = [obj]
     encoded = dumps(template)
     assert isinstance(encoded, bytes)

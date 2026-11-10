@@ -7,6 +7,7 @@ import qrcode
 from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps
 
 from .model import loads, substitute
+from .geometry import view_size
 
 DEFAULT_FONT = Path(__file__).with_name('fonts') / 'NotoSansCJKtc-Regular.otf'
 
@@ -103,13 +104,14 @@ def render(lbl_bytes, variables):
     Explicit variables override template defaults. Missing variables, invalid
     assets and unrenderable barcodes raise ValueError with object context.
     Relative font paths are resolved against the working directory.
-    Canvas rotation is editor-only: output always uses the original label axes.
+    Draw upright objects on the oriented canvas, then rotate the composed
+    image by -rotation to restore the physical label dimensions.
     """
     template = loads(lbl_bytes)
     canvas = template["canvas"]
     values = {**template.get("variables", {}), **variables}
-    result = Image.new("RGBA", (pixels(canvas["width_mm"], canvas["dpi"]),
-                                 pixels(canvas["height_mm"], canvas["dpi"])), "white")
+    result = Image.new("RGBA", tuple(pixels(length, canvas["dpi"])
+                                     for length in view_size(canvas)), "white")
     for obj in template["objects"]:
         try:
             tile = object_image(obj, canvas, values)
@@ -117,6 +119,7 @@ def render(lbl_bytes, variables):
                                          round(obj["y_mm"] * canvas["dpi"] / 25.4)))
         except Exception as exc:
             raise ValueError(f"Object {obj['id']} ({obj['type']}): {exc}") from exc
+    result = result.rotate(-canvas.get("rotation", 0), expand=True)
     result = result.convert("RGB")
     if canvas["mode"] == "greyscale":
         result = result.convert("L")

@@ -27,13 +27,13 @@ def new_object(kind):
         raise ValueError(f"Unknown object type: {kind}")
     obj = {"id": uuid.uuid4().hex, "type": kind, "x_mm": 5, "y_mm": 5,
             "width_mm": 30, "height_mm": 15 if kind != "qr" else 30,
-            "content": {"text": "Hello {name}", "image": "", "qr": "https://example.com/{id}",
+            "content": {"text": "SN: {SN}", "image": "", "qr": "https://example.com/{id}",
                         "code128": "{sku}", "rect": ""}[kind],
             "stroke_mm": 0.3, "radius_mm": 0,
             "font": "", "font_size": 12, "font_style": "normal",
             "font_weight": "normal", "color": "#000000"}
     if kind == "image":
-        obj.update(data=b"", image_name="")
+        obj.update(data=b"")
     return obj
 
 
@@ -93,8 +93,8 @@ def validate(template):
             if obj["type"] not in KINDS or not isinstance(obj["content"], str):
                 raise ValueError("Invalid object type or content")
             if obj['type'] == 'image':
-                if not isinstance(obj.get('data'), bytes) or not isinstance(obj.get('image_name', ''), str):
-                    raise ValueError('Image data must be bytes and image_name must be text')
+                if not isinstance(obj.get('data'), bytes):
+                    raise ValueError('Image data must be bytes')
                 if len(obj['data']) > 100 * 1024 * 1024:
                     raise ValueError('Image exceeds 100 MiB')
             if obj['type'] == 'rect':

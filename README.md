@@ -19,16 +19,15 @@ has a black background outside the label. The right panel shows Label, Objects,
 and Variables, in that order. The message bar stays below the tabs; printer controls appear alongside it only
 in the PySide6 desktop app. The **Data** tab holds editable rows for batch printing.
 
-- Select one of 25 label presets or set a custom size. Unit, width, height, and
-  Rotation share one row; DPI and mode share the next. Units are mm, cm, and in.
-  The default is **300 DPI**. Rotation selects 0, 90, 180, or 270 degrees
-  clockwise for the editor view, including objects, selection, and dragging.
-  Width/height and object X/Y/W/H remain in the original label coordinates.
+- Width, height, unit, and rotation share one row; DPI and mode share the next.
+  Units are mm, cm, and in; the default is **300 DPI**.
+  Rotation selects 0, 90, 180, or 270 degrees. At 90/270 degrees the editor
+  swaps the canvas width and height; objects stay upright with unchanged X/Y/W/H.
   Rotation is saved in `canvas.rotation` (default 0 for older templates).
-  `render()`, PNG exports, and printing always use the original orientation and
-  dimensions; changing the view alone does not change output pixels.
+  `render()`, PNG exports, and printing compose the oriented canvas first,
+  then rotate the complete image by `-rotation` back to the physical label size.
 - Add Text, Image, QR, Code128, or Rect. Select objects in the list or canvas and
-  drag to position them. X/Y and W/H each share a row. Delete selected appears
+  drag to position them. X/Y/W/H share one row. Delete selected appears
   only when an object is selected. Later objects render over earlier objects.
 - Text content commits on blur. The desktop app allows choosing a font file;
   the web app fixes the font to Noto Sans CJK TC. Point size, normal/italic style,
@@ -88,8 +87,7 @@ CJK TC. The standalone renderer accepts explicit font paths.
 Version 2 uses MessagePack with binary values and the `.lbl` extension. Old JSON
 and ZIP templates are not supported. Geometry is stored in millimetres regardless
 of `canvas.unit`; font size is in points. Object types are `text`, `image`, `qr`,
-`code128`, and `rect`. Images store original bytes in `data` and a display-only
-filename in `image_name`. Font paths remain in `font`. Text options are
+`code128`, and `rect`. Images store original bytes in `data`, without the original filename. Font paths remain in `font`. Text options are
 `font_style` and `font_weight`; rectangle options are `stroke_mm` and `radius_mm`.
 Use `labelate.model.loads(lbl_bytes)` and `dumps(template)` to decode and encode.
 See [examples/product.lbl](examples/product.lbl) for a complete template.

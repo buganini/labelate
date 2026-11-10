@@ -15,20 +15,6 @@ from .geometry import view_size, view_box, from_view
 from . import platform
 
 
-class Binding:
-    """PUI's value binding protocol backed by validated model operations."""
-    def __init__(self, get, set):
-        self.get, self.set = get, set
-
-    @property
-    def value(self):
-        return self.get()
-
-    @value.setter
-    def value(self, value):
-        self.set(value)
-
-
 class Labelate(UI.Application):
     def __init__(self):
         super().__init__()
@@ -36,15 +22,18 @@ class Labelate(UI.Application):
         self.selected, self.modified = None, False
         self.state = UI.State()
         self.state.revision = 0
+        self.state.selected_data_row = None
         self.state.objects = UI.State([])
         self.template['objects'] = self.state.objects
+        self.template['data_rows'] = UI.State([])
         self.object_inputs = {}
         self.accepted_objects = {}
-        self.active_tab = 'Label'
+        self.state.active_tab = 'Label'
+        self.state('active_tab').change(lambda value: self.commit_content())
         self.brand = ''
         self.printers = []
         self.printer_choice = 'Scan for printers…'
-        self.copies = '1'
+        self.state.copies = '1'
         self.busy = False
         self.print_message = ''
         self.printer_configs = {}
@@ -59,16 +48,19 @@ class Labelate(UI.Application):
         self.preview = None
         self.status = ''
         self.project_dir = None
-        self.bindings = {}
+        self.inputs = UI.State({})
+        self.input_callbacks = {}
         self.binding_scope = "label"
         self.refresh_preview()
 
     def snapshot(self):
         """Detach reactive objects at the persistence/render/worker boundary."""
-        return {**self.template, 'objects': Unstate(self.state.objects)}
+        return {**self.template, 'objects': Unstate(self.state.objects),
+                'data_rows': Unstate(self.template['data_rows'])}
 
     def install_template(self, template):
         with self.state:
+            self.state.selected_data_row = None
             self.object_inputs.clear()
             self.accepted_objects.clear()
             self.drafts = UI.State({})
@@ -76,7 +68,8 @@ class Labelate(UI.Application):
             objects = [self.make_object_state(obj) for obj in template['objects']]
             self.state.objects.clear()
             self.state.objects.extend(objects)
-            self.template = {**template, 'objects': self.state.objects}
+            self.template = {**template, 'objects': self.state.objects,
+                             'data_rows': UI.State([self.make_data_row(row) for row in template.get('data_rows', [])])}
 
     def make_object_state(self, data):
         # Supply defaults for fields omitted by older templates before binding them.
@@ -157,25 +150,58 @@ class Labelate(UI.Application):
 
     def object_number(self, label, obj, key):
         UI.Label(label)
-        UI.TextField(self.object_inputs[obj['id']](key)).id(key).layout(minWidth=48)
+        return UI.TextField(self.object_inputs[obj['id']](key)).id(key).layout(minWidth=48)
 
     def object_select(self, label, choices, obj, key):
         UI.Label(label)
         with UI.ComboBox(text_model=obj(key)).id(key):
             for choice in choices:
-                UI.ComboBoxItem(choice)
+                UI.ComboBoxItem(choice.title(), value=choice)
 
     def update(self, prev=None):
+        self.prepare_inputs()
         super().update(prev)
         platform.attach(self)
 
-    def binding(self, key, get, set):
-        binding = self.bindings.get(key)
-        if binding is None:
-            binding = self.bindings[key] = Binding(get, set)
-        else:
-            binding.get, binding.set = get, set
-        return binding
+    def prepare_inputs(self):
+        """Synchronize converted form values before entering the UI builder."""
+        canvas = self.template['canvas']
+        unit = canvas['unit']
+        values = {
+            'label:unit': unit,
+            'label:rotation': str(canvas.get('rotation', 0)),
+            'label:mode': canvas['mode'].title(),
+            'brand': self.brand or 'Select brand…',
+            'printer': self.printer_choice,
+            'print-settings': self.settings_open,
+            'printer-settings:printer-model': self.settings_draft.get('model', ''),
+            'printer-settings:printer-stock': self.settings_draft.get('stock', '62'),
+            'printer-settings:printer-media': self.settings_draft.get('media', 'gap'),
+            'printer-gap': self.settings_draft.get('gap', '2'),
+            'printer-baud': self.settings_draft.get('baudrate', '9600'),
+        }
+        for key in ('width_mm', 'height_mm', 'dpi'):
+            value = canvas[key] if key == 'dpi' else display_length(canvas[key], unit)
+            values['label:' + key] = f'{value:.3f}'.rstrip('0').rstrip('.')
+        values.update(('variable:' + key, str(value)) for key, value in self.template['variables'].items())
+        self.input_values = values
+        with self.inputs:
+            for key, value in values.items():
+                if key not in self.inputs:
+                    self.inputs[key] = value
+                    self.inputs(key).change(lambda value, k=key: self.commit_input(k, value))
+                else:
+                    self.inputs[key] = value
+
+    def input_state(self, key, setter):
+        self.input_callbacks[key] = setter
+        return self.inputs(key)
+
+    def commit_input(self, key, value):
+        # Model-to-form synchronization does not run user edit actions.
+        if self.inputs[key] != value or self.input_values[key] == value:
+            return
+        self.input_callbacks[key](value)
 
     def notify(self):
         self.state.revision += 1
@@ -193,7 +219,7 @@ class Labelate(UI.Application):
 
     def select(self, label, choices, value, setter, key):
         UI.Label(label)
-        with UI.ComboBox(text_model=self.binding(self.binding_scope + ':' + key, lambda: value, setter)).id(key):
+        with UI.ComboBox(text_model=self.input_state(self.binding_scope + ':' + key, setter)).id(key):
             for choice in choices:
                 UI.ComboBoxItem(choice)
 
@@ -208,13 +234,13 @@ class Labelate(UI.Application):
             except ValueError as exc:
                 self.status = str(exc)
                 self.notify()
-        return UI.TextField(self.binding(self.binding_scope + ':' + key, lambda: f'{value:.3f}'.rstrip('0').rstrip('.'), commit)).id(key).layout(minWidth=48)
+        return UI.TextField(self.input_state(self.binding_scope + ':' + key, commit)).id(key).layout(minWidth=48)
 
     def content(self):
         _ = self.state.revision
-        with UI.Window(title='Labelate — Label Template Editor', size=(1280, 800)).id('window'):
+        with UI.Window(title='Labelate — Label Template Editor', size=(1280, 800), maximize=True).id('window'):
             with UI.VBox().layout(padding=10):
-                with UI.Tabs(model=self.binding('active-tab', lambda: self.active_tab, self.set_tab)).id('tabs').layout(weight=1):
+                with UI.Tabs(model=self.state('active_tab')).id('tabs').layout(weight=1):
                     with UI.Tab('Label').id('Label'):
                         with UI.HBox().id('toolbar'):
                             for title, action in [('New', self.new), ('Open .lbl', self.open), ('Save .lbl', self.save), ('Export PNG', self.export)]:
@@ -236,47 +262,57 @@ class Labelate(UI.Application):
                 if platform.PRINTING:
                     self.print_settings_panel()
 
-    def set_tab(self, value):
-        self.commit_content()
-        self.active_tab = value
-        self.notify()
-
     def data_panel(self):
         names = variable_names(self.template)
         rows = self.template.get('data_rows', [])
         with UI.HBox():
             self.button('Add row', self.add_data_row)
-            self.button('Remove last row', self.remove_data_row, disabled=not rows)
+            self.button('Remove selected row', self.remove_data_row,
+                        disabled=not any(id(row) == self.state.selected_data_row for row in rows))
             UI.Label(f'{len(rows)} row(s) · one label per row')
             UI.Spacer()
         if not names:
             UI.Label('Add {variables} in the Label tab to create data columns.')
-        with UI.Table(columnHeader=['#', *names]).id('data-table').layout(weight=1):
+        with UI.Table(columnHeader=names, rowHeader=[str(i + 1) for i in range(len(rows))]).id('data-table').layout(weight=1):
             for i, row in enumerate(rows):
-                with UI.TableNode().id(f'data-row-{i}'):
-                    UI.TableNode(str(i+1))
+                with UI.TableNode().id(f'data-row-{id(row)}'):
                     for name in names:
-                        UI.TableNode(row.get(name, str(self.template['variables'].get(name, '')))).id(name).set(self.set_data_cell, i, name)
+                        UI.TableNode(row(name)).id(name).click(self.select_data_row, id(row))
 
     def add_data_row(self):
-        if (len(self.template.get('data_rows', [])) + 1) * (len(variable_names(self.template)) + 1) > 10000:
+        if (len(self.template.get('data_rows', [])) + 1) * max(1, len(variable_names(self.template))) > 10000:
             self.print_message = 'Data table exceeds 10,000 cells'
             self.notify()
             return
-        self.template.setdefault('data_rows', []).append(dict(self.template['variables']))
+        self.template['data_rows'].append(self.make_data_row(dict(self.template['variables'])))
         self.modified = True
         self.notify()
+
+    def select_data_row(self, event, row_id):
+        self.state.selected_data_row = row_id
 
     def remove_data_row(self):
-        if self.template.get('data_rows'):
-            self.template['data_rows'].pop()
+        rows = self.template['data_rows']
+        index = next((i for i, row in enumerate(rows)
+                      if id(row) == self.state.selected_data_row), None)
+        if index is None:
+            return
+        with self.state:
+            rows.pop(index)
+            self.state.selected_data_row = None
             self.modified = True
-            self.notify()
-
-    def set_data_cell(self, value, index, name):
-        self.template['data_rows'][index][name] = str(value)
-        self.modified = True
         self.notify()
+
+    def make_data_row(self, values):
+        row = UI.State({name: str(values.get(name, self.template['variables'].get(name, '')))
+                        for name in variable_names(self.template)})
+        for name in row.keys():
+            row(name).change(lambda value: self.data_changed())
+        return row
+
+    def data_changed(self):
+        self.modified = True
+        platform.modified(True)
 
     def print_panel(self):
         with UI.HBox().id('message-bar'):
@@ -284,12 +320,12 @@ class Labelate(UI.Application):
             if not platform.PRINTING:
                 return
             UI.Spacer()
-            with UI.ComboBox(text_model=self.binding('brand', lambda: self.brand or 'Select brand…', self.set_brand),
+            with UI.ComboBox(text_model=self.input_state('brand', self.set_brand),
                              disabled=self.busy or not platform.PRINTING).id('printer-brand'):
                 UI.ComboBoxItem('Select brand…')
                 for brand in ('Brother', 'Niim', 'TSC'):
                     UI.ComboBoxItem(brand)
-            with UI.ComboBox(text_model=self.binding('printer', lambda: self.printer_choice, self.set_printer),
+            with UI.ComboBox(text_model=self.input_state('printer', self.set_printer),
                              disabled=self.busy or not platform.PRINTING or not self.brand).id('printer-device'):
                 UI.ComboBoxItem('Scan for printers…')
                 for printer in self.printers:
@@ -297,16 +333,13 @@ class Labelate(UI.Application):
                 if self.selected_printer():
                     UI.ComboBoxItem('Printer settings…')
             disabled = self.busy or not platform.PRINTING or not self.selected_printer()
-            if self.active_tab == 'Label':
+            if self.state.active_tab == 'Label':
                 UI.Label('Copies')
-                binding = self.binding('copies', lambda: self.copies, self.set_copies)
+                binding = self.state('copies')
                 UI.TextField(binding, edit_model=binding).id('copies').layout(width=60)
                 self.button('Print Single Label', self.request_print, disabled=disabled)
             else:
                 self.button('Print All', self.request_print, disabled=disabled or not self.template.get('data_rows'))
-
-    def set_copies(self, value):
-        self.copies = str(value)
 
     def selected_printer(self):
         return next((p for p in self.printers if p.display == self.printer_choice), None)
@@ -375,7 +408,7 @@ class Labelate(UI.Application):
         self.notify()
 
     def print_settings_panel(self):
-        with UI.Modal(self.binding('print-settings', lambda: self.settings_open, self.close_settings),
+        with UI.Modal(self.input_state('print-settings', self.close_settings),
                       offValue=False, title='Printer settings', size=(520, 340)).id('print-settings'):
             with UI.VBox().layout(padding=12):
                 self.binding_scope = 'printer-settings'
@@ -393,13 +426,11 @@ class Labelate(UI.Application):
                                     lambda value: self.set_print_setting('media', value), 'printer-media')
                     with UI.HBox():
                         UI.Label('Gap / mark (mm)')
-                        UI.TextField(self.binding('printer-gap', lambda: self.settings_draft.get('gap', '2'),
-                                                  lambda value: self.set_print_setting('gap', value)))
+                        UI.TextField(self.input_state('printer-gap', lambda value: self.set_print_setting('gap', value)))
                     if self.selected_printer() and self.selected_printer().backend == 'serial':
                         with UI.HBox():
                             UI.Label('Baud rate')
-                            UI.TextField(self.binding('printer-baud', lambda: self.settings_draft.get('baudrate', '9600'),
-                                                      lambda value: self.set_print_setting('baudrate', value)))
+                            UI.TextField(self.input_state('printer-baud', lambda value: self.set_print_setting('baudrate', value)))
                 UI.Spacer()
                 with UI.HBox():
                     self.button('Cancel', lambda: self.close_settings(False), key='cancel-printer-settings')
@@ -429,8 +460,8 @@ class Labelate(UI.Application):
         from . import printing
         self.commit_content()
         try:
-            copies = printing.positive_integer(self.copies) if self.active_tab == 'Label' else 1
-            rows = copy.deepcopy(self.template.get('data_rows', [])) if self.active_tab == 'Data' else [{}]
+            copies = printing.positive_integer(self.state.copies) if self.state.active_tab == 'Label' else 1
+            rows = Unstate(self.template.get('data_rows', [])) if self.state.active_tab == 'Data' else [{}]
             if not rows:
                 raise ValueError('No data rows to print')
             config = self.printer_configs.get(self.config_key())
@@ -458,13 +489,13 @@ class Labelate(UI.Application):
         with UI.HBox().id('dimensions-row'):
             for key, label in [('width_mm', 'Width'), ('height_mm', 'Height')]:
                 self.number(label, display_length(canvas[key], unit),
-                            lambda v, k=key: self.set_canvas(k, millimetres(v, unit)), key, .001)
+                            lambda v, k=key: self.set_canvas(k, millimetres(v, unit)), key, .001).layout(width=40, minWidth=40)
             self.select('Unit', list(UNIT_MM), unit, self.set_unit, 'unit')
             self.select('Rotation', ['0', '90', '180', '270'], str(canvas.get('rotation', 0)),
                         self.set_rotation, 'rotation')
         with UI.HBox().id('output-row'):
-            self.number('DPI', canvas['dpi'], lambda v: self.set_canvas('dpi', round(v)), 'dpi', 36, 2400)
-            self.select('Mode', ['greyscale', 'color'], canvas['mode'], lambda v: self.set_canvas('mode', v), 'mode')
+            self.number('DPI', canvas['dpi'], lambda v: self.set_canvas('dpi', round(v)), 'dpi', 36, 2400).layout(width=40, minWidth=40)
+            self.select('Mode', ['Greyscale', 'Color'], canvas['mode'].title(), lambda v: self.set_canvas('mode', v.lower()), 'mode')
 
     def objects_panel(self):
         UI.Label('Objects').style(fontWeight=700)
@@ -478,7 +509,7 @@ class Labelate(UI.Application):
             with UI.VBox():
                 for obj in self.template['objects']:
                     prefix = '● ' if obj['id'] == self.selected else ''
-                    self.button(f"{prefix}{obj['type']} · {(obj.get('image_name', '') if obj['type'] == 'image' else obj['content'])[:32]}",
+                    self.button(f"{prefix}{obj['type']}" if obj['type'] == 'image' else f"{prefix}{obj['type']} · {obj['content'][:32]}",
                                 lambda key=obj['id']: self.select_object(key), obj['id'])
                 UI.Spacer()
         obj = self.current()
@@ -492,15 +523,14 @@ class Labelate(UI.Application):
         def change(key, value):
             self.set_object(key, value, oid)
         with UI.HBox():
-            self.object_number(f'X ({unit})', obj, 'x_mm')
-            self.object_number(f'Y ({unit})', obj, 'y_mm')
-        with UI.HBox():
-            self.object_number(f'W ({unit})', obj, 'width_mm')
-            self.object_number(f'H ({unit})', obj, 'height_mm')
+            self.object_number(f'X ({unit})', obj, 'x_mm').layout(width=40, minWidth=40)
+            self.object_number(f'Y ({unit})', obj, 'y_mm').layout(width=40, minWidth=40)
+            self.object_number(f'W ({unit})', obj, 'width_mm').layout(width=40, minWidth=40)
+            self.object_number(f'H ({unit})', obj, 'height_mm').layout(width=40, minWidth=40)
         if obj['type'] == 'image':
-            UI.Label('Image file')
-            UI.Label(obj.get('image_name') or 'No image selected').id('image-name')
-            self.button('Choose image…', self.browse_image)
+            with UI.HBox():
+                UI.Label('Image')
+                self.button('Choose image…', self.browse_image)
         elif obj['type'] != 'rect':
             UI.Label('Content')
             UI.TextEdit(obj('content'), edit_model=self.drafts(oid)).id('content-' + oid).layout(height=90)
@@ -526,8 +556,7 @@ class Labelate(UI.Application):
         for name in names:
             with UI.HBox().id('variable-' + name):
                 UI.Label(name)
-                UI.TextField(self.binding('variable:' + name, lambda k=name: str(self.template['variables'].get(k, '')),
-                                     lambda v, k=name: self.set_variable(k, v))).id(name)
+                UI.TextField(self.input_state('variable:' + name, lambda v, k=name: self.set_variable(k, v))).id(name)
         if not names:
             UI.Label('Use {name} in object content.')
 
@@ -543,6 +572,11 @@ class Labelate(UI.Application):
     def changed(self):
         self.modified = True
         reconcile_variables(self.template)
+        for row in self.template['data_rows']:
+            for name in variable_names(self.template):
+                if name not in row:
+                    row[name] = str(self.template['variables'].get(name, ''))
+                    row(name).change(lambda value: self.data_changed())
         for obj in self.state.objects:
             self.sync_object_inputs(obj)
         self.refresh_preview()
@@ -608,7 +642,7 @@ class Labelate(UI.Application):
 
     def refresh_preview(self):
         canvas = self.template['canvas']
-        size = tuple(pixels(canvas[k], canvas['dpi']) for k in ('width_mm', 'height_mm'))
+        size = tuple(pixels(length, canvas['dpi']) for length in view_size(canvas))
         result = Image.new('RGBA', size, 'white')
         errors = []
         for obj in self.template['objects']:
@@ -621,7 +655,6 @@ class Labelate(UI.Application):
             result.alpha_composite(tile, (round(obj['x_mm'] * canvas['dpi'] / 25.4), round(obj['y_mm'] * canvas['dpi'] / 25.4)))
         if canvas['mode'] == 'greyscale' and not errors:
             result = result.convert('L').convert('RGBA')
-        result = result.rotate(-canvas.get('rotation', 0), expand=True)
         result.thumbnail((1024, 1024), Image.Resampling.NEAREST)
         self.preview = result
         self.status = ' | '.join(errors) if errors else f"{size[0]} × {size[1]} px · {canvas['dpi']} DPI · {canvas.get('rotation', 0)}° view · Drag objects to position them"
@@ -629,7 +662,9 @@ class Labelate(UI.Application):
     def paint(self, canvas):
         c = self.template['canvas']
         vw, vh = view_size(c)
-        scale = max(.001, min((canvas.width-24)/vw, (canvas.height-24)/vh))
+        padding = 50
+        scale = max(.001, min((canvas.width - 2 * padding) / vw,
+                             (canvas.height - 2 * padding) / vh))
         w, h = vw*scale, vh*scale
         x, y = (canvas.width-w)/2, (canvas.height-h)/2
         self.viewport = x, y, scale
@@ -652,7 +687,8 @@ class Labelate(UI.Application):
         c = self.template['canvas']
         mx, my = from_view((event.x-x)/scale, (event.y-y)/scale, c)
         hit = None
-        if 0 <= mx <= c['width_mm'] and 0 <= my <= c['height_mm']:
+        vw, vh = view_size(c)
+        if 0 <= mx <= vw and 0 <= my <= vh:
             hit = next((o for o in reversed(self.template['objects']) if
                         o['x_mm'] <= mx <= o['x_mm']+o['width_mm'] and
                         o['y_mm'] <= my <= o['y_mm']+o['height_mm']), None)
@@ -667,9 +703,10 @@ class Labelate(UI.Application):
         x, y, scale = self.viewport
         c = self.template['canvas']
         mx, my = from_view((event.x-x)/scale, (event.y-y)/scale, c)
+        vw, vh = view_size(c)
         with self.state:
-            obj['x_mm'] = max(0, min(max(0, c['width_mm']-obj['width_mm']), mx-self.drag[0]))
-            obj['y_mm'] = max(0, min(max(0, c['height_mm']-obj['height_mm']), my-self.drag[1]))
+            obj['x_mm'] = max(0, min(max(0, vw-obj['width_mm']), mx-self.drag[0]))
+            obj['y_mm'] = max(0, min(max(0, vh-obj['height_mm']), my-self.drag[1]))
 
     def pointer_up(self, event):
         self.drag = None
@@ -685,7 +722,7 @@ class Labelate(UI.Application):
                 with Image.open(BytesIO(data)) as image:
                     image.verify()
                 obj = self.current()
-                candidate = dict(obj, data=data, image_name=Path(path).name, content='')
+                candidate = dict(obj, data=data, content='')
                 updated = dict(self.snapshot(), objects=[candidate if item is obj else Unstate(item) for item in self.state.objects])
                 dumps(updated)
                 with self.state:
@@ -715,7 +752,8 @@ class Labelate(UI.Application):
         if self.confirm_discard():
             self.install_template(new_template())
             self.path, self.selected, self.modified = None, None, False
-            self.bindings.clear()
+            self.input_callbacks.clear()
+            self.inputs = UI.State({})
             self.project_dir = None
             self.refresh_preview()
             self.notify()
@@ -727,7 +765,8 @@ class Labelate(UI.Application):
             self.install_template(template)
             self.project_dir = directory
             self.path, self.selected, self.modified = Path(path), None, False
-            self.bindings.clear()
+            self.input_callbacks.clear()
+            self.inputs = UI.State({})
             self.refresh_preview()
             self.notify()
         except (OSError, ValueError) as exc:
