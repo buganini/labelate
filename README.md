@@ -16,8 +16,8 @@ clears its virtual filesystem, so download your work before leaving.
 
 The **Label** tab contains the file toolbar, canvas, and properties. The canvas
 has a black background outside the label. The right panel shows Label, Objects,
-and Variables, in that order. The message bar and printer controls stay below
-the tabs. The **Data** tab holds editable rows for batch printing.
+and Variables, in that order. The message bar stays below the tabs; printer controls appear alongside it only
+in the PySide6 desktop app. The **Data** tab holds editable rows for batch printing.
 
 - Select one of 25 label presets or set a custom size. Unit, width, height, and
   Rotate share one row; DPI and mode share the next. Units are mm, cm, and in.
@@ -162,8 +162,9 @@ stop the batch, report completed submissions and uncertain current-label progres
 and never automatically resend. A queued/sent result does not claim physical
 printing; only a printer-confirmed result is shown as printed.
 
-The GitHub Pages/Pyodide build supports Label and Data editing but disables printer
-selection and printing. Native USB/BLE/serial/CUPS dependencies are not bundled;
+The GitHub Pages/Pyodide build supports Label and Data editing and shows only the
+message bar below the tabs. Printer selection, Copies, print buttons, and printer
+settings appear only in the PySide6 desktop app. Native USB/BLE/serial/CUPS dependencies are not bundled;
 browser hardware transports would require a separate integration.
 
 ## Local browser build

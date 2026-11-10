@@ -21,12 +21,14 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   const customer = page.locator('.pui-HBox').filter({has:page.getByText('customer',{exact:true})}).last().locator('input');
   await customer.fill('Ada');
   await customer.press('Tab');
-  console.log('checking print controls');
-  await expect(page.getByRole('button',{name:'Print Single Label',exact:true})).toBeDisabled();
-  await expect(page.locator('.pui-HBox').filter({has:page.getByText('Copies',{exact:true})}).last().locator('input:visible')).toHaveValue('1');
+  console.log('checking desktop-only print controls');
+  await expect(page.getByRole('button',{name:'Print Single Label',exact:true})).toHaveCount(0);
+  await expect(page.getByText('Copies',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('Select brand…',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('Scan for printers…',{exact:true})).toHaveCount(0);
   console.log('switching Data');
   await page.getByRole('tab',{name:'Data',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Print All',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Print All',exact:true})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Print Single Label',exact:true})).toHaveCount(0);
   await page.getByRole('button',{name:'Add row',exact:true}).click();
   const dataPanel=page.getByRole('tabpanel',{name:'Data'});

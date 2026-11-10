@@ -125,7 +125,8 @@ class Labelate(UI.Application):
                     with UI.Tab('Data').id('Data'):
                         self.data_panel()
                 self.print_panel()
-                self.print_settings_panel()
+                if platform.PRINTING:
+                    self.print_settings_panel()
 
     def set_tab(self, value):
         self.commit_content()
@@ -172,6 +173,8 @@ class Labelate(UI.Application):
     def print_panel(self):
         with UI.HBox().id('message-bar'):
             UI.Label(self.print_message or self.status).id('status').layout(weight=1)
+            if not platform.PRINTING:
+                return
             UI.Spacer()
             with UI.ComboBox(text_model=self.binding('brand', lambda: self.brand or 'Select brand…', self.set_brand),
                              disabled=self.busy or not platform.PRINTING).id('printer-brand'):
