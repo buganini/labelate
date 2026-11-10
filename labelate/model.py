@@ -19,7 +19,7 @@ LABEL_PRESETS = {
 
 def new_template():
     return {"version": 2, "canvas": {"width_mm": 100, "height_mm": 60,
-            "dpi": 300, "mode": "mono", "unit": "mm"}, "objects": [], "variables": {}, "data_rows": []}
+            "dpi": 300, "mode": "mono", "unit": "mm", "rotation": 0}, "objects": [], "variables": {}, "data_rows": []}
 
 
 def new_object(kind):
@@ -73,6 +73,9 @@ def validate(template):
             positive(canvas[key], key)
         if canvas["mode"] not in ("mono", "color") or canvas["unit"] not in UNIT_MM:
             raise ValueError("Invalid canvas mode or unit")
+        rotation = canvas.get('rotation', 0)
+        if type(rotation) is not int or rotation not in (0, 90, 180, 270):
+            raise ValueError('Rotation must be 0, 90, 180, or 270')
         w, h = (max(1, round(canvas[k] * canvas["dpi"] / 25.4)) for k in ("width_mm", "height_mm"))
         if w * h > 40_000_000:
             raise ValueError("Canvas exceeds 40 million pixels")

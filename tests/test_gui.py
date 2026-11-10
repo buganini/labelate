@@ -74,12 +74,25 @@ def test_browser_app(tmp_path, monkeypatch):
             field = next(n for n in nodes(app) if isinstance(n, UI.TextEdit) and not n.readonly)
             assert field.model is old_binding
             assert app.object_by_id(oid)['font_weight'] == 'bold'
-            app.viewport = (0, 0, 10)
-            app.pointer_down(SimpleNamespace(button=1, x=60, y=60))
-            app.pointer_move(SimpleNamespace(x=110, y=130))
-            app.pointer_up(SimpleNamespace())
-            assert app.current()['x_mm'] == 10
-            assert app.current()['y_mm'] == 12
+            from labelate import render
+            from PIL import Image
+            original = render(dumps(app.template), {})
+            for angle, start, end in [(0, (60,60), (110,130)), (90, (540,60), (470,110)),
+                                      (180, (940,540), (890,470)), (270, (60,940), (130,890))]:
+                app.set_object('x_mm', 5)
+                app.set_object('y_mm', 5)
+                app.set_rotation(str(angle))
+                expected = original.convert('RGBA').rotate(-angle, expand=True)
+                expected.thumbnail((1024, 1024), Image.Resampling.NEAREST)
+                assert app.preview.size == expected.size
+                assert app.preview.tobytes() == expected.tobytes()
+                app.viewport = (0, 0, 10)
+                app.pointer_down(SimpleNamespace(button=1, x=start[0], y=start[1]))
+                assert app.selected == oid
+                app.pointer_move(SimpleNamespace(x=end[0], y=end[1]))
+                app.pointer_up(SimpleNamespace())
+                assert app.current()['x_mm'] == 10
+                assert app.current()['y_mm'] == 12
             app.delete()
             assert app.template['variables'] == {}
             asset = tmp_path / 'red.png'

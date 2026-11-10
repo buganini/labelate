@@ -10,6 +10,7 @@ from .model import (new_template, new_object, variable_names, reconcile_variable
                     dumps, display_length, millimetres, LABEL_PRESETS, UNIT_MM)
 from .renderer import render, object_image, pixels
 from .template_io import open_document
+from .geometry import view_size, view_box, from_view
 from . import platform
 
 
@@ -356,7 +357,8 @@ class Labelate(UI.Application):
             for key, label in [('width_mm', 'Width'), ('height_mm', 'Height')]:
                 self.number(label, display_length(canvas[key], unit),
                             lambda v, k=key: self.set_canvas(k, millimetres(v, unit)), key, .001)
-            self.button('Rotate', self.rotate_label)
+            self.select('Rotation', ['0', '90', '180', '270'], str(canvas.get('rotation', 0)),
+                        self.set_rotation, 'rotation')
         with UI.HBox().id('output-row'):
             self.number('DPI', canvas['dpi'], lambda v: self.set_canvas('dpi', round(v)), 'dpi', 36, 2400)
             self.select('Mode', ['mono', 'color'], canvas['mode'], lambda v: self.set_canvas('mode', v), 'mode')
@@ -465,10 +467,11 @@ class Labelate(UI.Application):
         self.commit_content()
         self.set_canvas('unit', unit)
 
-    def rotate_label(self):
-        canvas = self.template['canvas']
-        canvas['width_mm'], canvas['height_mm'] = canvas['height_mm'], canvas['width_mm']
-        self.changed()
+    def set_rotation(self, value):
+        self.commit_content()
+        self.drag = None
+        self.template['canvas'].setdefault('rotation', 0)
+        self.set_canvas('rotation', int(value))
 
     def preset(self, name):
         if name in LABEL_PRESETS:
@@ -532,14 +535,16 @@ class Labelate(UI.Application):
             result.alpha_composite(tile, (round(obj['x_mm'] * canvas['dpi'] / 25.4), round(obj['y_mm'] * canvas['dpi'] / 25.4)))
         if canvas['mode'] == 'mono' and not errors:
             result = result.convert('L').point(lambda v: 255 if v >= 128 else 0).convert('RGBA')
+        result = result.rotate(-canvas.get('rotation', 0), expand=True)
         result.thumbnail((1024, 1024), Image.Resampling.NEAREST)
         self.preview = result
-        self.status = ' | '.join(errors) if errors else f"{size[0]} × {size[1]} px · {canvas['dpi']} DPI · Drag objects to position them"
+        self.status = ' | '.join(errors) if errors else f"{size[0]} × {size[1]} px · {canvas['dpi']} DPI · {canvas.get('rotation', 0)}° view · Drag objects to position them"
 
     def paint(self, canvas):
         c = self.template['canvas']
-        scale = max(.001, min((canvas.width-24)/c['width_mm'], (canvas.height-24)/c['height_mm']))
-        w, h = c['width_mm']*scale, c['height_mm']*scale
+        vw, vh = view_size(c)
+        scale = max(.001, min((canvas.width-24)/vw, (canvas.height-24)/vh))
+        w, h = vw*scale, vh*scale
         x, y = (canvas.width-w)/2, (canvas.height-h)/2
         self.viewport = x, y, scale
         canvas.drawRect(0, 0, canvas.width, canvas.height, fill=0x000000)
@@ -549,8 +554,8 @@ class Labelate(UI.Application):
         if obj:
             canvas.push()
             canvas.clipRect(x, y, w, h)
-            left, top = x+obj['x_mm']*scale, y+obj['y_mm']*scale
-            canvas.drawRect(left, top, left+obj['width_mm']*scale, top+obj['height_mm']*scale, stroke=0x2563eb, width=2)
+            left, top, right, bottom = view_box(obj, c)
+            canvas.drawRect(x+left*scale, y+top*scale, x+right*scale, y+bottom*scale, stroke=0x2563eb, width=2)
             canvas.pop()
 
     def pointer_down(self, event):
@@ -558,8 +563,8 @@ class Labelate(UI.Application):
             return
         self.commit_content()
         x, y, scale = self.viewport
-        mx, my = (event.x-x)/scale, (event.y-y)/scale
         c = self.template['canvas']
+        mx, my = from_view((event.x-x)/scale, (event.y-y)/scale, c)
         hit = None
         if 0 <= mx <= c['width_mm'] and 0 <= my <= c['height_mm']:
             hit = next((o for o in reversed(self.template['objects']) if
@@ -575,8 +580,9 @@ class Labelate(UI.Application):
             return
         x, y, scale = self.viewport
         c = self.template['canvas']
-        obj['x_mm'] = max(0, min(max(0, c['width_mm']-obj['width_mm']), (event.x-x)/scale-self.drag[0]))
-        obj['y_mm'] = max(0, min(max(0, c['height_mm']-obj['height_mm']), (event.y-y)/scale-self.drag[1]))
+        mx, my = from_view((event.x-x)/scale, (event.y-y)/scale, c)
+        obj['x_mm'] = max(0, min(max(0, c['width_mm']-obj['width_mm']), mx-self.drag[0]))
+        obj['y_mm'] = max(0, min(max(0, c['height_mm']-obj['height_mm']), my-self.drag[1]))
         self.changed()
 
     def pointer_up(self, event):

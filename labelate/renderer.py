@@ -103,6 +103,7 @@ def render(lbl_bytes, variables):
     Explicit variables override template defaults. Missing variables, invalid
     assets and unrenderable barcodes raise ValueError with object context.
     Relative font paths are resolved against the working directory.
+    Canvas rotation is editor-only: output always uses the original label axes.
     """
     template = loads(lbl_bytes)
     canvas = template["canvas"]

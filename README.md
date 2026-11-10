@@ -20,8 +20,13 @@ and Variables, in that order. The message bar stays below the tabs; printer cont
 in the PySide6 desktop app. The **Data** tab holds editable rows for batch printing.
 
 - Select one of 25 label presets or set a custom size. Unit, width, height, and
-  Rotate share one row; DPI and mode share the next. Units are mm, cm, and in.
-  The default is **300 DPI**. Rotate swaps label width and height.
+  Rotation share one row; DPI and mode share the next. Units are mm, cm, and in.
+  The default is **300 DPI**. Rotation selects 0, 90, 180, or 270 degrees
+  clockwise for the editor view, including objects, selection, and dragging.
+  Width/height and object X/Y/W/H remain in the original label coordinates.
+  Rotation is saved in `canvas.rotation` (default 0 for older templates).
+  `render()`, PNG exports, and printing always use the original orientation and
+  dimensions; changing the view alone does not change output pixels.
 - Add Text, Image, QR, Code128, or Rect. Select objects in the list or canvas and
   drag to position them. X/Y and W/H each share a row. Delete selected appears
   only when an object is selected. Later objects render over earlier objects.

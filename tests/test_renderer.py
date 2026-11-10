@@ -148,3 +148,35 @@ def test_multiline_text_has_multiple_ink_rows(style, weight):
     runs = sum(value and (index == 0 or not occupied[index - 1]) for index, value in enumerate(occupied))
     assert runs >= 2
     assert alpha.getbbox()[1] == 0
+
+
+@pytest.mark.parametrize('angle', [0, 90, 180, 270])
+def test_rotation_preserves_native_output(angle):
+    from labelate.geometry import view_box, view_size, to_view, from_view
+    template = new_template()
+    template['canvas'].update(width_mm=40, height_mm=20, dpi=254)
+    obj = new_object('rect')
+    obj.update(x_mm=3, y_mm=2, width_mm=10, height_mm=5, stroke_mm=.5)
+    template['objects'] = [obj]
+    baseline = render(dumps(template), {})
+    template['canvas']['rotation'] = angle
+    restored = loads(dumps(template))
+    assert restored['canvas']['rotation'] == angle
+    image = render(dumps(restored), {})
+    assert image.size == (400, 200)
+    assert image.tobytes() == baseline.tobytes()
+    canvas = template['canvas']
+    assert view_size(canvas) == ((20,40) if angle in (90,270) else (40,20))
+    expected = {0:(3,2,13,7), 90:(13,3,18,13), 180:(27,13,37,18), 270:(2,27,7,37)}
+    assert view_box(obj, canvas) == expected[angle]
+    assert from_view(*to_view(7, 4, canvas), canvas) == (7, 4)
+    del canvas['rotation']
+    assert render(dumps(template), {}).tobytes() == baseline.tobytes()
+
+
+@pytest.mark.parametrize('angle', [True, 45, 360, -90, '90', 90.0])
+def test_invalid_rotation(angle):
+    template = new_template()
+    template['canvas']['rotation'] = angle
+    with pytest.raises(ValueError, match='Rotation'):
+        dumps(template)
