@@ -14,8 +14,10 @@ clears its virtual filesystem, so download your work before leaving.
 
 ## Editing labels
 
-The left canvas has a black background outside the label. The right panel shows
-Label, Objects, and Variables, in that order.
+The **Label** tab contains the file toolbar, canvas, and properties. The canvas
+has a black background outside the label. The right panel shows Label, Objects,
+and Variables, in that order. The message bar and printer controls stay below
+the tabs. The **Data** tab holds editable rows for batch printing.
 
 - Select one of 25 label presets or set a custom size. Unit, width, height, and
   Rotate share one row; DPI and mode share the next. Units are mm, cm, and in.
@@ -101,6 +103,69 @@ and a Choose font button. Font paths are saved relative to the selected `.lbl`
 destination and resolved against that folder on opening. Images are embedded;
 fonts remain external files. File dialogs save directly to disk.
 
+## Data and desktop printing
+
+The Data tab has one column per template variable. Add a row to copy the current
+variable defaults, then click a cell to edit it. Each row represents one label.
+Use Remove last row to remove the final row. Data rows are saved in the same
+`.lbl` file as `data_rows`; older version-2 templates without this field open with
+an empty table. Variables added after a row was created use the current default
+until that cell is edited. Columns removed from the template retain their stored
+row values, so restoring a variable restores its data.
+
+Python 3.11+ is required. Printer libraries are optional and pinned to Git commits:
+
+```sh
+python -m pip install -e '.[printers]'   # All three families
+# Or select one:
+python -m pip install -e '.[brother]'
+python -m pip install -e '.[niim]'
+python -m pip install -e '.[tsc]'
+```
+
+- [brother_ql](https://github.com/pklaus/brother_ql): Brother QL USB discovery and
+  printing. Network discovery is not implemented upstream and is not offered here.
+- [pyniim](https://github.com/buganini/pyniim): BLE discovery; the supported model
+  is currently M2_H. Discovery may include unrelated BLE advertisements; the library
+  verifies the service and model on connection.
+- [pytsc](https://github.com/buganini/pytsc): serial, CUPS, and optional direct USB
+  discovery. Direct USB currently targets the PL2305 adapter, not arbitrary USB
+  printers. Adapter discovery does not identify the attached printer model.
+
+USB requires system libusb (for example, `brew install libusb` on macOS), and BLE
+requires Bluetooth permissions. Missing libraries or device access errors appear
+in the message bar without preventing editing.
+
+Select Brother, Niim, or TSC to scan, then select a discovered device. Use the
+printer dropdown's Scan for printers… item to rescan, or Printer settings… to
+change settings. On first Print, choose the actual model and, for Brother, the
+loaded stock. TSC settings include media type, gap/mark length, and serial baud
+rate when applicable. Settings and device selection are kept for this app session;
+they are not stored in the template.
+
+In Label, **Copies** defaults to 1 and accepts positive integers; **Print Single
+Label** prints the current template and variable values that many times. In Data,
+**Print All** prints every row once, in order, without using Copies. Editing and
+switching tabs remain available during printing; a job uses a snapshot taken when
+Print is pressed. Closing the app waits for the active operation to finish.
+
+All rows are preflighted before the first submission. Rendering uses the selected
+printer's resolution, including TSC's actual 8 or 12 dots/mm. Brother stock must
+match the label's physical dimensions; white edge margins are cropped to the
+printable area. Marks in unprintable margins cause an error instead of scaling or
+silently discarding content. The preview and PNG export retain the Label DPI.
+
+Pillow images pass directly to each converter and jobs are sent from memory;
+Labelate creates no temporary image or instruction files. CUPS can spool files
+internally. Existing CUPS queues are preserved (`recreate_queue=False`). Failures
+stop the batch, report completed submissions and uncertain current-label progress,
+and never automatically resend. A queued/sent result does not claim physical
+printing; only a printer-confirmed result is shown as printed.
+
+The GitHub Pages/Pyodide build supports Label and Data editing but disables printer
+selection and printing. Native USB/BLE/serial/CUPS dependencies are not bundled;
+browser hardware transports would require a separate integration.
+
 ## Local browser build
 
 Python 3.12 and Node.js 22 are recommended. The builder converts the single
@@ -142,9 +207,13 @@ npm run test:browser
 
 To use an existing Chrome installation locally, set `CHROME_PATH` to its executable.
 Python tests cover rendering, model validation, desktop font selection/saving,
+printer adapters, batch preflight/failure behavior, and background UI dispatch,
 browser-backend bindings/lifecycle,
 relative font paths and binary image round trips. Playwright exercises the actual Pyodide app,
-content edits, extensionless image imports, .lbl round trips, and PNG downloads.
+tabs, data-cell commits, content edits, extensionless image imports, .lbl round
+trips, and PNG downloads. Install `.[dev,printers]` to run all offline printer
+conversion tests; without printer extras those tests are skipped. Automated tests
+never send real print jobs; physical output still requires hardware verification.
 
 [Build and deploy Labelate](.github/workflows/pages.yml) runs tests and builds on
 pull requests, pushes to main, and manual dispatch. Each successful build uploads

@@ -8,11 +8,16 @@ version = "0.1.0"
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 description = "A QPUIQ label template editor and Pillow renderer"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = ["QPUIQ[pyside6]==1.8", "Pillow>=10", "qrcode>=7.4", "python-barcode>=0.15", "msgpack==1.1.2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+brother = ['brother-ql @ git+https://github.com/pklaus/brother_ql.git@0dee94b5fc3721159bae556b8bd2d975f92b7b8b']
+niim = ['pyniim @ git+https://github.com/buganini/pyniim.git@695c617bd1d413df0c89be484115edafa27d8f32']
+tsc = ['pytsc[usb] @ git+https://github.com/buganini/pytsc.git@35fd21aa235c0a55089b2c195fae718584b7b020']
+printers = ['brother-ql @ git+https://github.com/pklaus/brother_ql.git@0dee94b5fc3721159bae556b8bd2d975f92b7b8b', 'pyniim @ git+https://github.com/buganini/pyniim.git@695c617bd1d413df0c89be484115edafa27d8f32', 'pytsc[usb] @ git+https://github.com/buganini/pytsc.git@35fd21aa235c0a55089b2c195fae718584b7b020']
+
 
 [project.scripts]
 labelate = "labelate.app:main"

@@ -17,10 +17,25 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await expect(page.getByRole('button',{name:'Choose font…'})).toHaveCount(0);
   await content.fill('標籤 {customer}\n第二行');
   await content.press('Tab');
-  await expect(page.getByText('customer',{exact:true})).toBeVisible();
+  await expect(page.getByRole('tabpanel',{name:'Label'}).getByText('customer',{exact:true})).toBeVisible();
   const customer = page.locator('.pui-HBox').filter({has:page.getByText('customer',{exact:true})}).last().locator('input');
   await customer.fill('Ada');
   await customer.press('Tab');
+  console.log('checking print controls');
+  await expect(page.getByRole('button',{name:'Print Single Label',exact:true})).toBeDisabled();
+  await expect(page.locator('.pui-HBox').filter({has:page.getByText('Copies',{exact:true})}).last().locator('input:visible')).toHaveValue('1');
+  console.log('switching Data');
+  await page.getByRole('tab',{name:'Data',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Print All',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Print Single Label',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Add row',exact:true}).click();
+  const dataPanel=page.getByRole('tabpanel',{name:'Data'});
+  await dataPanel.getByRole('cell',{name:'Ada',exact:true}).click();
+  await dataPanel.getByRole('textbox',{name:'Edit cell'}).fill('Bob');
+  // Switching tabs commits the still-focused data cell.
+  await page.getByRole('tab',{name:'Label',exact:true}).click();
+  await expect(page.getByRole('tabpanel',{name:'Label'})).toBeVisible();
+  console.log('Data edited');
   const canvas = page.locator('canvas').first();
   const bounds = await canvas.boundingBox();
   const scale = Math.min((bounds.width-24)/100, (bounds.height-24)/60);
@@ -40,6 +55,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await page.getByRole('button',{name:'Dismiss label.lbl',exact:true}).click();
   const json = decode(await readFile(await download.path()));
   expect(json.canvas.dpi).toBe(300);
+  expect(json.data_rows).toEqual([{customer:'Bob'}]);
   expect(json.objects[0].content).toBe('標籤 {customer}\n第二行');
   expect(json.variables.customer).toBe('Ada');
   expect(json.objects[0].x_mm).toBeCloseTo(10,0);

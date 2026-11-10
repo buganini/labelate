@@ -43,6 +43,57 @@ def test_desktop_font_and_relative_save(tmp_path, monkeypatch, capsys):
     app.browse_image()
     assert app.save()
     assert loads(target.read_bytes())['objects'][-1]['data'] == asset.read_bytes()
+    from labelate import printing
+    import time
+    device = printing.Printer('TSC', 'test', 'pyusb', 'Test printer')
+    monkeypatch.setattr(printing, 'discover', lambda brand: ([device], []))
+    app.set_brand('TSC')
+    deadline = time.monotonic() + 3
+    while app.busy and time.monotonic() < deadline:
+        flush()
+        time.sleep(.005)
+    assert not app.busy and app.selected_printer() == device
+    monkeypatch.setattr(printing, 'models', lambda brand: ['TTP-342'])
+    app.configure_printer(False)
+    flush()
+    assert app.settings_open
+    app.set_print_setting('model', 'TTP-342')
+    app.apply_print_settings()
+    app.add('text')
+    app.set_draft(app.selected, 'Order {order}')
+    app.set_tab('Data')
+    app.add_data_row()
+    app.set_data_cell('A001', 0, 'order')
+    flush()
+    assert any(isinstance(n, UI.Button) and n.text == 'Print All' for n in nodes(app))
+    assert not any(isinstance(n, UI.Button) and n.text == 'Print Single Label' for n in nodes(app))
+    sent = []
+    def print_labels(printer, config, data, rows, copies, progress):
+        sent.append((loads(data), rows, copies))
+        progress('Printing…')
+        return 'Printed.'
+    monkeypatch.setattr(printing, 'print_labels', print_labels)
+    app.request_print()
+    deadline = time.monotonic() + 3
+    while app.busy and time.monotonic() < deadline:
+        flush()
+        time.sleep(.005)
+    assert not app.busy and app.print_message == 'Printed.'
+    assert sent[-1][1:] == ([{'name':'', 'order':'A001'}], 1)
+    app.set_tab('Label')
+    app.set_copies('2')
+    app.set_draft(app.selected, 'Updated {order}')
+    app.request_print()
+    app.request_print()  # Busy guard prevents double submission.
+    deadline = time.monotonic() + 3
+    while app.busy and time.monotonic() < deadline:
+        flush()
+        time.sleep(.005)
+    assert len(sent) == 2 and sent[-1][2] == 2
+    assert sent[-1][0]['objects'][-1]['content'] == 'Updated {order}'
+    app.set_copies('0')
+    app.request_print()
+    assert 'positive integer' in app.print_message and len(sent) == 2
     app.modified = False
     app.drafts.clear()
     next(n for n in nodes(app) if isinstance(n, UI.Window)).ui.close()

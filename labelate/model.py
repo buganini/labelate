@@ -19,7 +19,7 @@ LABEL_PRESETS = {
 
 def new_template():
     return {"version": 2, "canvas": {"width_mm": 100, "height_mm": 60,
-            "dpi": 300, "mode": "mono", "unit": "mm"}, "objects": [], "variables": {}}
+            "dpi": 300, "mode": "mono", "unit": "mm"}, "objects": [], "variables": {}, "data_rows": []}
 
 
 def new_object(kind):
@@ -78,6 +78,10 @@ def validate(template):
             raise ValueError("Canvas exceeds 40 million pixels")
         if not isinstance(template["objects"], list) or not isinstance(template.get("variables", {}), dict):
             raise ValueError("Invalid objects or variables")
+        rows = template.get('data_rows', [])
+        if not isinstance(rows, list) or any(not isinstance(row, dict) or
+                any(not isinstance(k, str) or not isinstance(v, str) for k, v in row.items()) for row in rows):
+            raise ValueError('Data rows must be dictionaries of text values')
         ids = set()
         for obj in template["objects"]:
             if not isinstance(obj["id"], str) or obj["id"] in ids:
@@ -105,6 +109,8 @@ def validate(template):
                 positive(obj.get("font_size", 12), "font_size")
                 if obj.get("font_size", 12) > 1000:
                     raise ValueError("Font size must not exceed 1000 pt")
+        if max(1, len(rows)) * (len(variable_names(template)) + 1) > 10000:
+            raise ValueError('Data table exceeds 10,000 cells')
         return template
     except (KeyError, TypeError) as exc:
         raise ValueError(f"Invalid template structure: {exc}") from exc

@@ -1,5 +1,6 @@
 """Declarative QPUIQ editor, including its canvas and input controls."""
 import math
+import copy
 from pathlib import Path
 
 import PUI.PySide6 as UI
@@ -33,6 +34,19 @@ class Labelate(UI.Application):
         self.selected, self.modified = None, False
         self.state = UI.State()
         self.state.revision = 0
+        self.active_tab = 'Label'
+        self.brand = ''
+        self.printers = []
+        self.printer_choice = 'Scan for printers…'
+        self.copies = '1'
+        self.busy = False
+        self.print_message = ''
+        self.printer_configs = {}
+        self.settings_open = False
+        self.settings_draft = {}
+        self.model_choices = []
+        self.stock_choices = []
+        self.pending_print = False
         self.drafts = {}
         self.drag = None
         self.viewport = (0, 0, 1)
@@ -66,8 +80,8 @@ class Labelate(UI.Application):
     def object_by_id(self, key):
         return next((obj for obj in self.template['objects'] if obj['id'] == key), None)
 
-    def button(self, text, action, key=None):
-        return UI.Button(text).id(key or text).click(lambda event: action())
+    def button(self, text, action, key=None, disabled=False):
+        return UI.Button(text, disabled=disabled).id(key or text).click(lambda event: action())
 
     def select(self, label, choices, value, setter, key):
         UI.Label(label)
@@ -92,21 +106,238 @@ class Labelate(UI.Application):
         _ = self.state.revision
         with UI.Window(title='Labelate — Label Template Editor', size=(1280, 800)).id('window'):
             with UI.VBox().layout(padding=10):
-                with UI.HBox().id('toolbar'):
-                    for title, action in [('New', self.new), ('Open .lbl', self.open), ('Save .lbl', self.save), ('Export PNG', self.export)]:
-                        self.button(title, action)
-                    UI.Spacer()
-                with UI.Splitter().id('workspace'):
-                    UI.Canvas(self.paint).id('canvas').layout(width=720, minWidth=240, minHeight=300).mousedown(self.pointer_down).mousemove(self.pointer_move).mouseup(self.pointer_up)
-                    with UI.Scroll().id('sidebar').layout(width=520, minWidth=460):
-                        with UI.VBox().layout(padding=10):
-                            self.label_panel()
-                            UI.Divider()
-                            self.objects_panel()
-                            UI.Divider()
-                            self.variables_panel()
+                with UI.Tabs(model=self.binding('active-tab', lambda: self.active_tab, self.set_tab)).id('tabs').layout(weight=1):
+                    with UI.Tab('Label').id('Label'):
+                        with UI.HBox().id('toolbar'):
+                            for title, action in [('New', self.new), ('Open .lbl', self.open), ('Save .lbl', self.save), ('Export PNG', self.export)]:
+                                self.button(title, action)
                             UI.Spacer()
-                UI.Label(self.status).id('status')
+                        with UI.Splitter().id('workspace'):
+                            UI.Canvas(self.paint).id('canvas').layout(width=720, minWidth=240, minHeight=300).mousedown(self.pointer_down).mousemove(self.pointer_move).mouseup(self.pointer_up)
+                            with UI.Scroll().id('sidebar').layout(width=520, minWidth=460):
+                                with UI.VBox().layout(padding=10):
+                                    self.label_panel()
+                                    UI.Divider()
+                                    self.objects_panel()
+                                    UI.Divider()
+                                    self.variables_panel()
+                                    UI.Spacer()
+                    with UI.Tab('Data').id('Data'):
+                        self.data_panel()
+                self.print_panel()
+                self.print_settings_panel()
+
+    def set_tab(self, value):
+        self.commit_content()
+        self.active_tab = value
+        self.notify()
+
+    def data_panel(self):
+        names = variable_names(self.template)
+        rows = self.template.get('data_rows', [])
+        with UI.HBox():
+            self.button('Add row', self.add_data_row)
+            self.button('Remove last row', self.remove_data_row, disabled=not rows)
+            UI.Label(f'{len(rows)} row(s) · one label per row')
+            UI.Spacer()
+        if not names:
+            UI.Label('Add {variables} in the Label tab to create data columns.')
+        with UI.Table(columnHeader=['#', *names]).id('data-table').layout(weight=1):
+            for i, row in enumerate(rows):
+                with UI.TableNode().id(f'data-row-{i}'):
+                    UI.TableNode(str(i+1))
+                    for name in names:
+                        UI.TableNode(row.get(name, str(self.template['variables'].get(name, '')))).id(name).set(self.set_data_cell, i, name)
+
+    def add_data_row(self):
+        if (len(self.template.get('data_rows', [])) + 1) * (len(variable_names(self.template)) + 1) > 10000:
+            self.print_message = 'Data table exceeds 10,000 cells'
+            self.notify()
+            return
+        self.template.setdefault('data_rows', []).append(dict(self.template['variables']))
+        self.modified = True
+        self.notify()
+
+    def remove_data_row(self):
+        if self.template.get('data_rows'):
+            self.template['data_rows'].pop()
+            self.modified = True
+            self.notify()
+
+    def set_data_cell(self, value, index, name):
+        self.template['data_rows'][index][name] = str(value)
+        self.modified = True
+        self.notify()
+
+    def print_panel(self):
+        with UI.HBox().id('message-bar'):
+            UI.Label(self.print_message or self.status).id('status').layout(weight=1)
+            UI.Spacer()
+            with UI.ComboBox(text_model=self.binding('brand', lambda: self.brand or 'Select brand…', self.set_brand),
+                             disabled=self.busy or not platform.PRINTING).id('printer-brand'):
+                UI.ComboBoxItem('Select brand…')
+                for brand in ('Brother', 'Niim', 'TSC'):
+                    UI.ComboBoxItem(brand)
+            with UI.ComboBox(text_model=self.binding('printer', lambda: self.printer_choice, self.set_printer),
+                             disabled=self.busy or not platform.PRINTING or not self.brand).id('printer-device'):
+                UI.ComboBoxItem('Scan for printers…')
+                for printer in self.printers:
+                    UI.ComboBoxItem(printer.display)
+                if self.selected_printer():
+                    UI.ComboBoxItem('Printer settings…')
+            disabled = self.busy or not platform.PRINTING or not self.selected_printer()
+            if self.active_tab == 'Label':
+                UI.Label('Copies')
+                binding = self.binding('copies', lambda: self.copies, self.set_copies)
+                UI.TextField(binding, edit_model=binding).id('copies').layout(width=60)
+                self.button('Print Single Label', self.request_print, disabled=disabled)
+            else:
+                self.button('Print All', self.request_print, disabled=disabled or not self.template.get('data_rows'))
+
+    def set_copies(self, value):
+        self.copies = str(value)
+
+    def selected_printer(self):
+        return next((p for p in self.printers if p.display == self.printer_choice), None)
+
+    def set_brand(self, value):
+        if self.busy or not platform.PRINTING or value not in ('Brother', 'Niim', 'TSC'):
+            return
+        self.brand = value
+        self.printers = []
+        self.printer_choice = 'Scan for printers…'
+        self.scan_printers()
+
+    def set_printer(self, value):
+        if self.busy:
+            return
+        if value == 'Scan for printers…':
+            self.scan_printers()
+        elif value == 'Printer settings…':
+            self.configure_printer(False)
+        else:
+            self.printer_choice = value
+            self.notify()
+
+    def run_task(self, message, work, complete):
+        self.busy = True
+        self.print_message = message
+        self.notify()
+        def done(result, error):
+            self.busy = False
+            if error:
+                self.print_message = str(error)
+            else:
+                complete(result)
+            self.notify()
+        platform.run_background(self, work, done)
+
+    def scan_printers(self):
+        if self.busy or not self.brand or not platform.PRINTING:
+            return
+        from . import printing
+        brand = self.brand
+        def complete(result):
+            self.printers, warnings = result
+            self.printer_choice = self.printers[0].display if self.printers else 'Scan for printers…'
+            self.print_message = f'Found {len(self.printers)} {brand} device(s).'
+            if warnings:
+                self.print_message += ' ' + ' | '.join(warnings)
+        self.run_task('Scanning printers…', lambda progress: printing.discover(brand), complete)
+
+    def config_key(self):
+        printer = self.selected_printer()
+        return (printer.brand, printer.backend, printer.identifier)
+
+    def configure_printer(self, pending):
+        from . import printing
+        if not self.selected_printer():
+            return
+        try:
+            self.model_choices = printing.models(self.brand)
+            self.stock_choices = printing.stocks() if self.brand == 'Brother' else []
+            self.settings_draft = dict(self.printer_configs.get(self.config_key(), printing.settings(self.brand)))
+            self.pending_print = pending
+            self.settings_open = True
+        except Exception as exc:
+            self.print_message = str(exc)
+        self.notify()
+
+    def print_settings_panel(self):
+        with UI.Modal(self.binding('print-settings', lambda: self.settings_open, self.close_settings),
+                      offValue=False, title='Printer settings', size=(520, 340)).id('print-settings'):
+            with UI.VBox().layout(padding=12):
+                self.binding_scope = 'printer-settings'
+                with UI.HBox():
+                    self.select('Model', ['', *self.model_choices], self.settings_draft.get('model', ''),
+                                lambda value: self.set_print_setting('model', value), 'printer-model')
+                if self.brand == 'Brother':
+                    with UI.HBox():
+                        self.select('Stock', self.stock_choices, self.settings_draft.get('stock', '62'),
+                                    lambda value: self.set_print_setting('stock', value), 'printer-stock')
+                    UI.Label('Label dimensions must match stock. Keep objects inside printable margins.')
+                if self.brand == 'TSC':
+                    with UI.HBox():
+                        self.select('Media', ['gap', 'continuous', 'black-mark'], self.settings_draft.get('media', 'gap'),
+                                    lambda value: self.set_print_setting('media', value), 'printer-media')
+                    with UI.HBox():
+                        UI.Label('Gap / mark (mm)')
+                        UI.TextField(self.binding('printer-gap', lambda: self.settings_draft.get('gap', '2'),
+                                                  lambda value: self.set_print_setting('gap', value)))
+                    if self.selected_printer() and self.selected_printer().backend == 'serial':
+                        with UI.HBox():
+                            UI.Label('Baud rate')
+                            UI.TextField(self.binding('printer-baud', lambda: self.settings_draft.get('baudrate', '9600'),
+                                                      lambda value: self.set_print_setting('baudrate', value)))
+                UI.Spacer()
+                with UI.HBox():
+                    self.button('Cancel', lambda: self.close_settings(False), key='cancel-printer-settings')
+                    self.button('Save and Print' if self.pending_print else 'Apply', self.apply_print_settings,
+                                key='apply-printer-settings', disabled=not self.settings_draft.get('model'))
+
+    def set_print_setting(self, key, value):
+        self.settings_draft[key] = value
+        self.notify()
+
+    def close_settings(self, value):
+        self.settings_open = bool(value)
+        if not value:
+            self.pending_print = False
+        self.notify()
+
+    def apply_print_settings(self):
+        self.printer_configs[self.config_key()] = dict(self.settings_draft)
+        pending = self.pending_print
+        self.close_settings(False)
+        if pending:
+            self.request_print()
+
+    def request_print(self):
+        if self.busy or not platform.PRINTING or not self.selected_printer():
+            return
+        from . import printing
+        self.commit_content()
+        try:
+            copies = printing.positive_integer(self.copies) if self.active_tab == 'Label' else 1
+            rows = copy.deepcopy(self.template.get('data_rows', [])) if self.active_tab == 'Data' else [{}]
+            if not rows:
+                raise ValueError('No data rows to print')
+            config = self.printer_configs.get(self.config_key())
+            if not config:
+                self.configure_printer(True)
+                return
+            template_bytes = dumps(self.template)
+            printer = self.selected_printer()
+            config = dict(config)
+        except ValueError as exc:
+            self.print_message = str(exc)
+            self.notify()
+            return
+        def complete(result):
+            self.print_message = result
+        self.run_task('Preparing print…',
+                      lambda progress: printing.print_labels(printer, config, template_bytes, rows, copies, progress),
+                      complete)
 
     def label_panel(self):
         self.binding_scope = 'label'
