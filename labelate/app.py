@@ -11,6 +11,7 @@ from .model import (new_template, new_object, variable_names, reconcile_variable
                     dumps, display_length, millimetres, UNIT_MM)
 from .renderer import render, object_image, pixels
 from .template_io import open_document
+from .data_import import read_data
 from .geometry import view_size, view_box, from_view
 from . import platform
 
@@ -84,6 +85,7 @@ class Labelate(UI.Application):
                                 if self.object_by_id(oid) is obj and value != obj['content'] else None)
         inputs = self.object_inputs[oid] = UI.State({
             key: self.object_number_text(obj, key) for key in self.NUMBER_FIELDS})
+        inputs['font_family'] = platform.font_family(obj)
         for key in self.NUMBER_FIELDS:
             inputs(key).change(lambda value, k=key: self.commit_object_number(obj, k, value))
         for key in obj.keys():
@@ -144,6 +146,8 @@ class Labelate(UI.Application):
                 self.notify()
             return
         self.accepted_objects[oid] = current
+        if current.get('font') != previous.get('font') or current.get('font_index') != previous.get('font_index'):
+            self.object_inputs[oid]['font_family'] = platform.font_family(obj)
         if current['content'] != previous['content']:
             self.drafts[oid] = current['content']
         self.changed()
@@ -266,6 +270,7 @@ class Labelate(UI.Application):
         names = variable_names(self.template)
         rows = self.template.get('data_rows', [])
         with UI.HBox():
+            self.button('Import XLSX/CSV', self.import_data)
             self.button('Add row', self.add_data_row)
             self.button('Remove selected row', self.remove_data_row,
                         disabled=not any(id(row) == self.state.selected_data_row for row in rows))
@@ -278,6 +283,27 @@ class Labelate(UI.Application):
                 with UI.TableNode().id(f'data-row-{id(row)}'):
                     for name in names:
                         UI.TableNode(row(name)).id(name).click(self.select_data_row, id(row))
+
+    def import_data(self):
+        self.commit_content()
+        path = UI.OpenFile(title='Import data', types={'Tables': ['xlsx', 'csv']})
+        if not path:
+            return
+        try:
+            rows = read_data(path, variable_names(self.template))
+            dumps({**self.snapshot(), 'data_rows': rows})
+            prepared = [self.make_data_row(row) for row in rows]
+            with self.state:
+                target = self.template['data_rows']
+                target.clear()
+                target.extend(prepared)
+                self.state.selected_data_row = None
+                self.modified = True
+                self.print_message = f'Imported {len(rows)} row(s) from {Path(path).name}.'
+                self.notify()
+        except Exception as exc:
+            self.print_message = f'Import failed: {exc}'
+            self.notify()
 
     def add_data_row(self):
         if (len(self.template.get('data_rows', [])) + 1) * max(1, len(variable_names(self.template))) > 10000:

@@ -30,7 +30,7 @@ def new_object(kind):
             "content": {"text": "SN: {SN}", "image": "", "qr": "https://example.com/{id}",
                         "code128": "{sku}", "rect": ""}[kind],
             "stroke_mm": 0.3, "radius_mm": 0,
-            "font": "", "font_size": 12, "font_style": "normal",
+            "font": "", "font_index": 0, "font_size": 12, "font_style": "normal",
             "font_weight": "normal", "color": "#000000"}
     if kind == "image":
         obj.update(data=b"")
@@ -105,6 +105,8 @@ def validate(template):
             if round(obj["width_mm"] * canvas["dpi"] / 25.4) * round(obj["height_mm"] * canvas["dpi"] / 25.4) > 40_000_000:
                 raise ValueError("Object exceeds 40 million pixels")
             if obj["type"] == "text":
+                if type(obj.get("font_index", 0)) is not int or not 0 <= obj.get("font_index", 0) < 256:
+                    raise ValueError("Invalid font collection index")
                 if obj.get("font_style", "normal") not in ("normal", "italic"):
                     raise ValueError("Invalid font style")
                 if obj.get("font_weight", "normal") not in ("normal", "bold"):

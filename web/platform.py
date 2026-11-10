@@ -15,6 +15,10 @@ def modified(value):
     publish(value)
 
 
+def font_family(obj):
+    return ''
+
+
 def font_controls(editor, obj, change):
     with UI.HBox():
         UI.Label('Font')

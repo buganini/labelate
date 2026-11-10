@@ -10,6 +10,8 @@ from labelate.app import Labelate
 class StateControlsTests(unittest.TestCase):
     def test_startup_and_editable_data(self):
         app = Labelate()
+        if QtWidgets.QApplication.instance():
+            app.ui = QtWidgets.QApplication.instance()
         output = io.StringIO()
         try:
             with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):

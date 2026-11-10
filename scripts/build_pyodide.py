@@ -10,7 +10,7 @@ from urllib.request import urlopen
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PUI_COMMIT = '091c24f44916c5bf5796f0bb922380d3cddba1e4'  # upstream tag 1.8
+PUI_COMMIT = 'c4358175115bc2da8d1859e07ecb0e0e85ebc457'  # FontComboBox support after 1.8
 FONT_BASE = 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/'
 
 
@@ -53,7 +53,7 @@ def main():
     source = args.pui_source.resolve()
     commit = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
     if commit != PUI_COMMIT:
-        parser.error(f'PUI source must be pinned to {PUI_COMMIT} (QPUIQ 1.8)')
+        parser.error(f'PUI source must be pinned to {PUI_COMMIT} (QPUIQ 1.8 + FontComboBox)')
     subprocess.run(['git', '-C', str(source), 'diff', '--exit-code', 'HEAD', '--', 'PUI', 'browser-client'], check=True)
     output = ROOT / 'dist/pyodide'
     output.mkdir(parents=True, exist_ok=True)
@@ -61,7 +61,7 @@ def main():
     wheels = ROOT / '.build/wheels'
     wheels.mkdir(parents=True, exist_ok=True)
     subprocess.run([sys.executable, '-m', 'pip', 'download', '--no-deps', '--only-binary=:all:',
-                    '--dest', str(wheels), 'qrcode==8.2', 'python-barcode==0.16.1', 'msgpack==1.1.2'], check=True)
+                    '--dest', str(wheels), 'qrcode==8.2', 'python-barcode==0.16.1', 'msgpack==1.1.2', 'openpyxl==3.1.5', 'et-xmlfile==2.0.0'], check=True)
     with zipfile.ZipFile(output / 'app.zip', 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for directory in ('PUI', 'PUI/_browser', 'PUI/pyodide'):
             for path in sorted((source / directory).glob('*.py')):
@@ -73,7 +73,8 @@ def main():
         archive.write(source / 'LICENSE.txt', 'licenses/PUI-MIT.txt')
         for font in fonts:
             archive.write(font, 'labelate/fonts/' + font.name)
-        for pattern in ('qrcode-8.2-*.whl', 'python_barcode-0.16.1-*.whl', 'msgpack-1.1.2-*.whl'):
+        for pattern in ('qrcode-8.2-*.whl', 'python_barcode-0.16.1-*.whl', 'msgpack-1.1.2-*.whl',
+                        'openpyxl-3.1.5-*.whl', 'et_xmlfile-2.0.0-*.whl'):
             wheel = next(wheels.glob(pattern))
             with zipfile.ZipFile(wheel) as package:
                 for name in package.namelist():
@@ -93,7 +94,7 @@ def main():
     (output / 'build-info.json').write_text(json.dumps({
         'qpuiq': '1.8', 'pui_commit': PUI_COMMIT, 'pyodide': '314.0.7',
         'qrcode': '8.2', 'python-barcode': '0.16.1', 'license': 'GPL-3.0-only',
-        'font': 'Noto Sans CJK TC Regular 2.004', 'msgpack': '1.1.2'
+        'font': 'Noto Sans CJK TC Regular 2.004', 'msgpack': '1.1.2', 'openpyxl': '3.1.5', 'et-xmlfile': '2.0.0'
     }, indent=2) + '\n')
     print(f'Prepared {output}')
 

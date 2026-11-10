@@ -1,6 +1,6 @@
 # Labelate
 
-A label template editor built with **QPUIQ 1.8** and Pillow, supporting a
+A label template editor built with **QPUIQ 1.8 + FontComboBox** and Pillow, supporting a
 **PySide6 desktop app** and a **Pyodide browser build**. The desktop source imports
 PySide6 directly; the static build changes that import to Pyodide. There is no
 runtime backend selector. Browser Python runs in a worker without an app server.
@@ -29,7 +29,7 @@ in the PySide6 desktop app. The **Data** tab holds editable rows for batch print
 - Add Text, Image, QR, Code128, or Rect. Select objects in the list or canvas and
   drag to position them. X/Y/W/H share one row. Delete selected appears
   only when an object is selected. Later objects render over earlier objects.
-- Text content commits on blur. The desktop app allows choosing a font file;
+- Text content commits on blur. The desktop app offers a system font picker and font-file selection;
   the web app fixes the font to Noto Sans CJK TC. Point size, normal/italic style,
   normal/bold weight, and color in color mode are supported. Style and weight
   share a row. Italic uses a 12-degree slant; bold uses a proportional stroke.
@@ -102,16 +102,21 @@ python3 labelate
 # Or: python -m labelate
 ```
 
-The desktop app uses PUI's PySide6 backend. Text objects have a font path field
+The desktop app uses PUI's PySide6 backend. Text objects have a system FontComboBox, a font path field,
 and a Choose font button. Font paths are saved relative to the selected `.lbl`
 destination and resolved against that folder on opening. Images are embedded;
 fonts remain external files. File dialogs save directly to disk.
 
 ## Data and desktop printing
 
+In the Data tab, **Import XLSX/CSV** replaces the table after validation.
+The first row must contain every template variable name (case-sensitive); extra
+columns are ignored. CSV uses UTF-8, including BOM. XLSX uses the first worksheet
+and cached formula values. Empty rows are skipped; failed imports preserve data.
+
 The Data tab has one column per template variable. Add a row to copy the current
 variable defaults, then click a cell to edit it. Each row represents one label.
-Use Remove last row to remove the final row. Data rows are saved in the same
+Select a cell and use Remove selected row to delete that row. Data rows are saved in the same
 `.lbl` file as `data_rows`; older version-2 templates without this field open with
 an empty table. Variables added after a row was created use the current default
 until that cell is edited. Columns removed from the template retain their stored
@@ -185,7 +190,7 @@ python -m pip install -e '.[dev]'
 npm ci
 mkdir -p .build
 git clone https://github.com/buganini/PUI.git .build/PUI
-git -C .build/PUI checkout 091c24f44916c5bf5796f0bb922380d3cddba1e4
+git -C .build/PUI checkout c4358175115bc2da8d1859e07ecb0e0e85ebc457
 python scripts/build_pyodide.py
 npm run build
 python3 -m http.server 8868 --directory dist/pyodide
@@ -194,7 +199,7 @@ python3 -m http.server 8868 --directory dist/pyodide
 Open [http://localhost:8868](http://localhost:8868). Do not open `index.html` with
 `file://`. Deploy `dist/pyodide/` to any HTTPS static host, including a URL subpath.
 
-The Python builder pins the QPUIQ 1.8 source commit and packages only shared/Pyodide
+The Python builder pins the QPUIQ 1.8 + FontComboBox source commit and packages only shared/Pyodide
 modules, Labelate, qrcode 8.2, python-barcode 0.16.1, and msgpack 1.1.2
 (using its pure Python implementation in the browser). The JavaScript builder
 adapts the pinned PUI cookbook bootstrap to start Labelate, loading Pyodide
@@ -259,3 +264,9 @@ font and license into ignored `.build/fonts/`, verifies their SHA-256 hashes,
 and includes them in the browser archive. This adds about 16 MB before ZIP
 compression. Source-only Python usage can pass a font path explicitly; without
 the built font, the renderer retains its platform/Pillow fallback.
+
+Desktop font selection uses PUI FontComboBox. The selected system family is resolved
+to a Pillow-readable font file; collection fonts also store a zero-based
+`font_index`. Manual font-file selection remains available. The web version
+continues to use bundled Noto Sans CJK TC. PUI is pinned to commit
+`c4358175115bc2da8d1859e07ecb0e0e85ebc457` for FontComboBox support.

@@ -7,6 +7,8 @@ import PUI.PySide6 as UI
 from PySide6 import QtCore, QtWidgets
 
 from .model import dumps
+from .system_fonts import system_fonts
+from PIL import ImageFont
 
 PRINTING = True
 
@@ -39,14 +41,44 @@ def modified(value):
     pass
 
 
+def font_family(obj):
+    try:
+        return ImageFont.truetype(obj['font'], 12, index=obj.get('font_index', 0)).getname()[0] if obj['font'] else ''
+    except (OSError, ValueError):
+        return ''
+
+
 def font_controls(editor, obj, change):
+    inputs = editor.object_inputs[obj['id']]
+
+    def select_family(event):
+        family = inputs['font_family']
+        resolved = system_fonts().get(family)
+        if resolved is None:
+            editor.status = f'Cannot locate a Pillow-readable font file for {family}. Choose a font file instead.'
+            editor.notify()
+            return
+        path, index = resolved
+        with editor.state:
+            obj['font_index'] = index
+            change('font', path)
+
+    with UI.HBox():
+        UI.Label('Font')
+        UI.FontComboBox(inputs('font_family')).id('font-family').change(select_family)
     with UI.HBox():
         UI.Label('Font file')
         UI.TextField(obj('font'), placeholder='Default font').id('font')
         def choose():
             path = UI.OpenFile(title='Choose font', types={'Fonts': ['ttf', 'otf', 'ttc']})
             if path:
-                change('font', str(Path(path).resolve()))
+                with editor.state:
+                    obj['font_index'] = 0
+                    change('font', str(Path(path).resolve()))
+                    try:
+                        inputs['font_family'] = ImageFont.truetype(path, 12).getname()[0]
+                    except (OSError, ValueError):
+                        inputs['font_family'] = ''
         editor.button('Choose font…', choose)
 
 

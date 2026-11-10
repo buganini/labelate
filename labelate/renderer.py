@@ -15,9 +15,9 @@ def pixels(mm, dpi):
     return max(1, round(mm * dpi / 25.4))
 
 
-def load_font(path, size):
+def load_font(path, size, index=0):
     if path:
-        return ImageFont.truetype(path, size)
+        return ImageFont.truetype(path, size, index=index)
     if DEFAULT_FONT.is_file():
         return ImageFont.truetype(str(DEFAULT_FONT), size)
     for candidate in ("/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
@@ -43,7 +43,7 @@ def object_image(obj, canvas, values):
                                               radius=radius, outline='black', width=width)
     elif kind == "text":
         font_pixels = max(1, round(obj.get("font_size", 12) * dpi / 72))
-        font = load_font(obj.get("font", ""), font_pixels)
+        font = load_font(obj.get("font", ""), font_pixels, obj.get("font_index", 0))
         color = obj.get("color", "#000000") if canvas["mode"] == "color" else "#000000"
         ImageColor.getrgb(color)
         stroke = max(1, round(font_pixels / 30)) if obj.get("font_weight", "normal") == "bold" else 0

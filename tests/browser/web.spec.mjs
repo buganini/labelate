@@ -12,7 +12,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await expect(page.locator('#pui-status')).toBeHidden();
   await page.getByRole('button', {name:'Text',exact:true}).click();
   const content = page.locator('textarea:not([readonly])');
-  await expect(content).toHaveValue('Hello {name}');
+  await expect(content).toHaveValue('SN: {SN}');
   await expect(page.getByText('Noto Sans CJK TC',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Choose font…'})).toHaveCount(0);
   await content.fill('標籤 {customer}\n第二行');
@@ -44,12 +44,12 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await expect(page.getByRole('button',{name:'Rotate',exact:true})).toHaveCount(0);
   const canvas = page.locator('canvas').first();
   const bounds = await canvas.boundingBox();
-  const scale = Math.min((bounds.width-24)/60, (bounds.height-24)/100);
+  const scale = Math.min((bounds.width-100)/60, (bounds.height-100)/100);
   const ox = bounds.x+(bounds.width-60*scale)/2;
   const oy = bounds.y+(bounds.height-100*scale)/2;
-  await page.mouse.move(ox+54*scale, oy+6*scale);
+  await page.mouse.move(ox+6*scale, oy+6*scale);
   await page.mouse.down();
-  await page.mouse.move(ox+47*scale, oy+11*scale, {steps:4});
+  await page.mouse.move(ox+11*scale, oy+13*scale, {steps:4});
   await page.mouse.up();
   await page.getByRole('button', {name:'Save .lbl',exact:true}).click();
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -91,7 +91,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   console.log('image imported');
-  await expect(page.getByText('pixel',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button', {name:/image/}).filter({hasText:'●'})).toBeVisible();
   await page.getByRole('button', {name:'Export PNG',exact:true}).click();
   await page.getByRole('dialog').getByRole('button', {name:'Download',exact:true}).click();
   const pngPromise=page.waitForEvent('download');
@@ -115,7 +115,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
     name:'roundtrip.lbl',mimeType:'application/octet-stream',buffer:lbl
   });
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('button',{name:/image · pixel/})).toBeVisible();
+  await expect(page.getByRole('button',{name:'image',exact:true})).toBeVisible();
   await page.screenshot({path:'test-results/labelate.png',fullPage:true});
   expect(errors).toEqual([]);
 });

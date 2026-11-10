@@ -70,7 +70,7 @@ def test_image_bytes_and_greyscale(tmp_path):
 def test_errors():
     template = new_template()
     template['objects'].append(new_object('text'))
-    with pytest.raises(ValueError, match='Missing variable: name'):
+    with pytest.raises(ValueError, match='Missing variable: SN'):
         render(dumps(template), {})
     template['objects'] = [new_object('code128')]
     with pytest.raises(ValueError, match='ASCII'):

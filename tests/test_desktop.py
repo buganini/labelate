@@ -23,6 +23,15 @@ def test_desktop_font_and_relative_save(tmp_path, monkeypatch, capsys):
     flush()
     app.add('text')
     flush()
+    from labelate.system_fonts import system_fonts
+    from labelate.renderer import load_font
+    picker = next(n for n in nodes(app) if n._id == 'font-family')
+    family = next(name for name in system_fonts() if picker.ui.findText(name) >= 0)
+    picker.choose(picker.ui.findText(family))
+    flush()
+    obj = app.current()
+    assert load_font(obj['font'], 12, obj['font_index']).getname()[0] == family
+    assert app.object_inputs[obj['id']]['font_family'] == family
     font_button = next(n for n in nodes(app) if isinstance(n, UI.Button) and n.text == 'Choose font…')
     monkeypatch.setattr(UI, 'OpenFile', lambda **kwargs: '/custom/font.ttf')
     font_button.ui.click()
@@ -79,7 +88,7 @@ def test_desktop_font_and_relative_save(tmp_path, monkeypatch, capsys):
         flush()
         time.sleep(.005)
     assert not app.busy and app.print_message == 'Printed.'
-    assert sent[-1][1:] == ([{'name':'', 'order':'A001'}], 1)
+    assert sent[-1][1:] == ([{'SN':'', 'order':'A001'}], 1)
     app.state('active_tab').value = 'Label'
     app.state('copies').value = '2'
     app.set_draft(app.selected, 'Updated {order}')
