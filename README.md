@@ -204,6 +204,17 @@ adapts the pinned PUI cookbook bootstrap to start Labelate, loading Pyodide
 bootstrap, and worker/archive hashes reject mismatched cached assets. PySide6,
 the Web server backend, and cookbook application code are not shipped.
 
+## Reactive object model
+
+The editor stores objects in a PUI State list, with a State dictionary per object.
+Content, font, style, and weight controls use native State bindings. Numeric input
+State converts the selected display unit to canonical millimetres and synchronizes
+back after dragging or model edits. State change callbacks validate edits, restore
+invalid values, reconcile variables, and refresh the preview. Text drafts remain
+separate State values until blur or an operation that commits pending edits.
+Persistence, rendering, and printing receive ordinary dictionaries through a
+snapshot; UI State and callbacks are never serialized into the `.lbl` file.
+
 ## Tests and GitHub Pages
 
 ```sh

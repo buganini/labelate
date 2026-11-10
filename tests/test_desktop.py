@@ -95,7 +95,6 @@ def test_desktop_font_and_relative_save(tmp_path, monkeypatch, capsys):
     app.request_print()
     assert 'positive integer' in app.print_message and len(sent) == 2
     app.modified = False
-    app.drafts.clear()
     next(n for n in nodes(app) if isinstance(n, UI.Window)).ui.close()
     flush()
     output = capsys.readouterr()

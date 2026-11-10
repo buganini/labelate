@@ -42,8 +42,7 @@ def modified(value):
 def font_controls(editor, obj, change):
     with UI.HBox():
         UI.Label('Font file')
-        UI.TextField(editor.binding(obj['id'] + ':font', lambda: obj.get('font', ''),
-                                    lambda value: change('font', value)), placeholder='Default font').id('font')
+        UI.TextField(obj('font'), placeholder='Default font').id('font')
         def choose():
             path = UI.OpenFile(title='Choose font', types={'Fonts': ['ttf', 'otf', 'ttc']})
             if path:

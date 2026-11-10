@@ -4,10 +4,11 @@ import copy
 from pathlib import Path
 
 import PUI.PySide6 as UI
+from PUI.state import Unstate
 from PIL import Image, ImageDraw, ImageColor
 
 from .model import (new_template, new_object, variable_names, reconcile_variables,
-                    dumps, display_length, millimetres, LABEL_PRESETS, UNIT_MM)
+                    dumps, display_length, millimetres, UNIT_MM)
 from .renderer import render, object_image, pixels
 from .template_io import open_document
 from .geometry import view_size, view_box, from_view
@@ -35,6 +36,10 @@ class Labelate(UI.Application):
         self.selected, self.modified = None, False
         self.state = UI.State()
         self.state.revision = 0
+        self.state.objects = UI.State([])
+        self.template['objects'] = self.state.objects
+        self.object_inputs = {}
+        self.accepted_objects = {}
         self.active_tab = 'Label'
         self.brand = ''
         self.printers = []
@@ -48,7 +53,7 @@ class Labelate(UI.Application):
         self.model_choices = []
         self.stock_choices = []
         self.pending_print = False
-        self.drafts = {}
+        self.drafts = UI.State({})
         self.drag = None
         self.viewport = (0, 0, 1)
         self.preview = None
@@ -57,6 +62,108 @@ class Labelate(UI.Application):
         self.bindings = {}
         self.binding_scope = "label"
         self.refresh_preview()
+
+    def snapshot(self):
+        """Detach reactive objects at the persistence/render/worker boundary."""
+        return {**self.template, 'objects': Unstate(self.state.objects)}
+
+    def install_template(self, template):
+        with self.state:
+            self.object_inputs.clear()
+            self.accepted_objects.clear()
+            self.drafts = UI.State({})
+            self.template = dict(template)
+            objects = [self.make_object_state(obj) for obj in template['objects']]
+            self.state.objects.clear()
+            self.state.objects.extend(objects)
+            self.template = {**template, 'objects': self.state.objects}
+
+    def make_object_state(self, data):
+        # Supply defaults for fields omitted by older templates before binding them.
+        values = {**new_object(data['type']), **data}
+        for key in self.NUMBER_FIELDS:
+            values[key] = float(values[key])
+        obj = UI.State(values)
+        oid = obj['id']
+        self.accepted_objects[oid] = Unstate(obj)
+        self.drafts[oid] = obj['content']
+        self.drafts(oid).change(lambda value: platform.modified(True)
+                                if self.object_by_id(oid) is obj and value != obj['content'] else None)
+        inputs = self.object_inputs[oid] = UI.State({
+            key: self.object_number_text(obj, key) for key in self.NUMBER_FIELDS})
+        for key in self.NUMBER_FIELDS:
+            inputs(key).change(lambda value, k=key: self.commit_object_number(obj, k, value))
+        for key in obj.keys():
+            obj(key).change(lambda value, item=obj: self.object_state_changed(item))
+        return obj
+
+    NUMBER_FIELDS = ('x_mm', 'y_mm', 'width_mm', 'height_mm', 'stroke_mm', 'radius_mm', 'font_size')
+
+    def object_number_text(self, obj, key):
+        value = obj[key]
+        if key.endswith('_mm'):
+            value = display_length(value, self.template['canvas']['unit'])
+        return f'{value:.3f}'.rstrip('0').rstrip('.')
+
+    def sync_object_inputs(self, obj):
+        with self.state:
+            for key in self.NUMBER_FIELDS:
+                self.object_inputs[obj['id']][key] = self.object_number_text(obj, key)
+
+    def commit_object_number(self, obj, key, text):
+        if self.object_by_id(obj['id']) is not obj:
+            return
+        inputs = self.object_inputs[obj['id']]
+        # Ignore old notifications and formatted values synchronized from the model.
+        if inputs[key] != text or text == self.object_number_text(obj, key):
+            return
+        try:
+            value = float(text)
+            minimum = 0 if key in ('x_mm', 'y_mm', 'radius_mm') else 1 if key == 'font_size' else .001
+            maximum = 1000 if key == 'font_size' else 10000
+            if not math.isfinite(value) or not minimum <= value <= maximum:
+                raise ValueError(f'{key} must be between {minimum} and {maximum}')
+            if key.endswith('_mm'):
+                value = millimetres(value, self.template['canvas']['unit'])
+            obj[key] = value
+        except ValueError as exc:
+            self.status = str(exc)
+            self.sync_object_inputs(obj)
+            self.notify()
+
+    def object_state_changed(self, obj):
+        oid = obj['id']
+        if self.object_by_id(oid) is not obj:
+            return
+        previous = self.accepted_objects[oid]
+        current = Unstate(obj)
+        if current == previous:
+            return
+        try:
+            dumps(self.snapshot())
+        except ValueError as exc:
+            with self.state:
+                for key, value in previous.items():
+                    obj[key] = value
+                self.sync_object_inputs(obj)
+                self.drafts[oid] = obj['content']
+                self.status = str(exc)
+                self.notify()
+            return
+        self.accepted_objects[oid] = current
+        if current['content'] != previous['content']:
+            self.drafts[oid] = current['content']
+        self.changed()
+
+    def object_number(self, label, obj, key):
+        UI.Label(label)
+        UI.TextField(self.object_inputs[obj['id']](key)).id(key).layout(minWidth=48)
+
+    def object_select(self, label, choices, obj, key):
+        UI.Label(label)
+        with UI.ComboBox(text_model=obj(key)).id(key):
+            for choice in choices:
+                UI.ComboBoxItem(choice)
 
     def update(self, prev=None):
         super().update(prev)
@@ -330,7 +437,7 @@ class Labelate(UI.Application):
             if not config:
                 self.configure_printer(True)
                 return
-            template_bytes = dumps(self.template)
+            template_bytes = dumps(self.snapshot())
             printer = self.selected_printer()
             config = dict(config)
         except ValueError as exc:
@@ -348,15 +455,11 @@ class Labelate(UI.Application):
         canvas = self.template['canvas']
         unit = canvas['unit']
         UI.Label('Label').style(fontWeight=700)
-        preset = next((name for name, size in LABEL_PRESETS.items()
-                       if size == (canvas['width_mm'], canvas['height_mm'])), 'Custom')
-        with UI.HBox().id('preset-row'):
-            self.select('Label preset', ['Custom', *LABEL_PRESETS], preset, self.preset, 'preset')
         with UI.HBox().id('dimensions-row'):
-            self.select('Unit', list(UNIT_MM), unit, self.set_unit, 'unit')
             for key, label in [('width_mm', 'Width'), ('height_mm', 'Height')]:
                 self.number(label, display_length(canvas[key], unit),
                             lambda v, k=key: self.set_canvas(k, millimetres(v, unit)), key, .001)
+            self.select('Unit', list(UNIT_MM), unit, self.set_unit, 'unit')
             self.select('Rotation', ['0', '90', '180', '270'], str(canvas.get('rotation', 0)),
                         self.set_rotation, 'rotation')
         with UI.HBox().id('output-row'):
@@ -389,36 +492,29 @@ class Labelate(UI.Application):
         def change(key, value):
             self.set_object(key, value, oid)
         with UI.HBox():
-            self.number(f'X ({unit})', display_length(obj['x_mm'], unit),
-                        lambda v: change('x_mm', millimetres(v, unit)), 'x_mm')
-            self.number(f'Y ({unit})', display_length(obj['y_mm'], unit),
-                        lambda v: change('y_mm', millimetres(v, unit)), 'y_mm')
+            self.object_number(f'X ({unit})', obj, 'x_mm')
+            self.object_number(f'Y ({unit})', obj, 'y_mm')
         with UI.HBox():
-            self.number(f'W ({unit})', display_length(obj['width_mm'], unit),
-                        lambda v: change('width_mm', millimetres(v, unit)), 'width_mm', .001)
-            self.number(f'H ({unit})', display_length(obj['height_mm'], unit),
-                        lambda v: change('height_mm', millimetres(v, unit)), 'height_mm', .001)
+            self.object_number(f'W ({unit})', obj, 'width_mm')
+            self.object_number(f'H ({unit})', obj, 'height_mm')
         if obj['type'] == 'image':
             UI.Label('Image file')
             UI.Label(obj.get('image_name') or 'No image selected').id('image-name')
             self.button('Choose image…', self.browse_image)
         elif obj['type'] != 'rect':
             UI.Label('Content')
-            binding = self.binding(oid + ':content', lambda: obj['content'], lambda v: self.apply_content(v, oid))
-            draft = self.binding(oid + ':draft', lambda: self.drafts.get(oid, obj['content']), lambda v: self.set_draft(oid, v))
-            UI.TextEdit(binding, edit_model=draft).id('content-' + oid).layout(height=90)
+            UI.TextEdit(obj('content'), edit_model=self.drafts(oid)).id('content-' + oid).layout(height=90)
         if obj['type'] == 'rect':
             with UI.HBox():
-                for key, label, default, minimum in [('stroke_mm', 'Line width', .3, .001), ('radius_mm', 'Corner R', 0, 0)]:
-                    self.number(f'{label} ({unit})', display_length(obj.get(key, default), unit),
-                                lambda v, k=key: change(k, millimetres(v, unit)), key, minimum)
+                self.object_number(f'Line width ({unit})', obj, 'stroke_mm')
+                self.object_number(f'Corner R ({unit})', obj, 'radius_mm')
         if obj['type'] == 'text':
             platform.font_controls(self, obj, change)
             with UI.HBox():
-                self.number('Font size (pt)', obj.get('font_size', 12), lambda v: change('font_size', v), 'font-size', 1, 1000)
+                self.object_number('Font size (pt)', obj, 'font_size')
             with UI.HBox().id('typography-row'):
-                self.select('Style', ['normal', 'italic'], obj.get('font_style', 'normal'), lambda v: change('font_style', v), 'style')
-                self.select('Weight', ['normal', 'bold'], obj.get('font_weight', 'normal'), lambda v: change('font_weight', v), 'weight')
+                self.object_select('Style', ['normal', 'italic'], obj, 'font_style')
+                self.object_select('Weight', ['normal', 'bold'], obj, 'font_weight')
             if self.template['canvas']['mode'] == 'color':
                 with UI.HBox():
                     UI.Label('Color')
@@ -436,18 +532,19 @@ class Labelate(UI.Application):
             UI.Label('Use {name} in object content.')
 
     def set_draft(self, oid, value):
-        # TextEdit publishes edits here without redrawing or committing on each key.
-        self.drafts[oid] = value
-        platform.modified(True)
+        if self.object_by_id(oid):
+            self.drafts[oid] = value
 
     def commit_content(self):
-        pending, self.drafts = self.drafts, {}
-        for oid, value in pending.items():
-            self.apply_content(value, oid)
+        with self.state:
+            for oid, value in self.drafts.items():
+                self.apply_content(value, oid)
 
     def changed(self):
         self.modified = True
         reconcile_variables(self.template)
+        for obj in self.state.objects:
+            self.sync_object_inputs(obj)
         self.refresh_preview()
         self.notify()
 
@@ -455,7 +552,7 @@ class Labelate(UI.Application):
         old = self.template['canvas'][key]
         self.template['canvas'][key] = value
         try:
-            dumps(self.template)
+            dumps(self.snapshot())
         except ValueError as exc:
             self.template['canvas'][key] = old
             self.status = str(exc)
@@ -473,29 +570,13 @@ class Labelate(UI.Application):
         self.template['canvas'].setdefault('rotation', 0)
         self.set_canvas('rotation', int(value))
 
-    def preset(self, name):
-        if name in LABEL_PRESETS:
-            self.template['canvas']['width_mm'], self.template['canvas']['height_mm'] = LABEL_PRESETS[name]
-            self.changed()
-
     def set_object(self, key, value, oid=None):
         obj = self.object_by_id(oid if oid is not None else self.selected)
         if obj is None or obj.get(key) == value:
             return
-        old = obj.get(key)
         obj[key] = value
-        try:
-            dumps(self.template)
-        except ValueError as exc:
-            obj[key] = old
-            self.status = str(exc)
-            self.notify()
-            return
-        self.changed()
 
     def apply_content(self, value, oid=None):
-        oid = oid if oid is not None else self.selected
-        self.drafts.pop(oid, None)
         self.set_object('content', value, oid)
 
     def set_variable(self, key, value):
@@ -504,14 +585,19 @@ class Labelate(UI.Application):
 
     def add(self, kind):
         self.commit_content()
-        obj = new_object(kind)
-        self.template['objects'].append(obj)
+        obj = self.make_object_state(new_object(kind))
+        self.state.objects.append(obj)
         self.selected = obj['id']
         self.changed()
 
     def delete(self):
         self.commit_content()
-        self.template['objects'] = [o for o in self.template['objects'] if o['id'] != self.selected]
+        obj = self.current()
+        if obj is not None:
+            self.state.objects.remove(obj)
+            self.drafts.pop(obj['id'], None)
+            self.object_inputs.pop(obj['id'], None)
+            self.accepted_objects.pop(obj['id'], None)
         self.selected = None
         self.changed()
 
@@ -581,9 +667,9 @@ class Labelate(UI.Application):
         x, y, scale = self.viewport
         c = self.template['canvas']
         mx, my = from_view((event.x-x)/scale, (event.y-y)/scale, c)
-        obj['x_mm'] = max(0, min(max(0, c['width_mm']-obj['width_mm']), mx-self.drag[0]))
-        obj['y_mm'] = max(0, min(max(0, c['height_mm']-obj['height_mm']), my-self.drag[1]))
-        self.changed()
+        with self.state:
+            obj['x_mm'] = max(0, min(max(0, c['width_mm']-obj['width_mm']), mx-self.drag[0]))
+            obj['y_mm'] = max(0, min(max(0, c['height_mm']-obj['height_mm']), my-self.drag[1]))
 
     def pointer_up(self, event):
         self.drag = None
@@ -600,10 +686,11 @@ class Labelate(UI.Application):
                     image.verify()
                 obj = self.current()
                 candidate = dict(obj, data=data, image_name=Path(path).name, content='')
-                updated = dict(self.template, objects=[candidate if item is obj else item for item in self.template['objects']])
+                updated = dict(self.snapshot(), objects=[candidate if item is obj else Unstate(item) for item in self.state.objects])
                 dumps(updated)
-                obj.update(candidate)
-                self.changed()
+                with self.state:
+                    for key, value in candidate.items():
+                        obj[key] = value
             except (OSError, ValueError) as exc:
                 UI.Warning(str(exc), title='Image error')
 
@@ -626,8 +713,8 @@ class Labelate(UI.Application):
 
     def new(self):
         if self.confirm_discard():
-            self.template, self.path, self.selected, self.modified = new_template(), None, None, False
-            self.drafts.clear()
+            self.install_template(new_template())
+            self.path, self.selected, self.modified = None, None, False
             self.bindings.clear()
             self.project_dir = None
             self.refresh_preview()
@@ -637,9 +724,9 @@ class Labelate(UI.Application):
         try:
             template, directory = open_document(path)
             template = platform.prepare_template(template)
-            self.template, self.project_dir = template, directory
+            self.install_template(template)
+            self.project_dir = directory
             self.path, self.selected, self.modified = Path(path), None, False
-            self.drafts.clear()
             self.bindings.clear()
             self.refresh_preview()
             self.notify()
@@ -659,7 +746,7 @@ class Labelate(UI.Application):
         if not path:
             return False
         try:
-            self.status = platform.save_document(self.template, path, self.project_dir)
+            self.status = platform.save_document(self.snapshot(), path, self.project_dir)
             self.modified = False
             self.notify()
             return True
@@ -670,7 +757,7 @@ class Labelate(UI.Application):
     def export(self):
         self.commit_content()
         try:
-            image = render(dumps(self.template), {})
+            image = render(dumps(self.snapshot()), {})
             path = UI.SaveFile(default='label.png', title='Export PNG', types=['png'])
             if path:
                 image.save(path, format='PNG', dpi=image.info['dpi'])

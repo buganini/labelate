@@ -11,6 +11,7 @@ from pathlib import Path
 from types import ModuleType
 from scripts.build_pyodide import browser_source
 from labelate.model import loads, dumps
+from PUI.state import StateList, StateDict, BaseBinding
 
 
 def nodes(root):
@@ -48,6 +49,9 @@ def test_browser_app(tmp_path, monkeypatch):
             app.add('text')
             await settle()
             oid = app.selected
+            assert isinstance(app.state.objects, StateList)
+            assert app.template['objects'] is app.state.objects
+            assert isinstance(app.current(), StateDict)
             field = next(n for n in nodes(app) if isinstance(n, UI.TextEdit) and not n.readonly)
             field.edit_model.value = 'Pending {customer}'
             assert app.current()['content'] != 'Pending {customer}'
@@ -69,14 +73,16 @@ def test_browser_app(tmp_path, monkeypatch):
             assert app.template['canvas']['width_mm'] == 100
             field = next(n for n in nodes(app) if isinstance(n, UI.TextEdit) and not n.readonly)
             old_binding = field.model
+            assert isinstance(old_binding, BaseBinding)
+            assert old_binding.state is app.current()
             app.set_variable('customer', 'Bob')
             await settle()
             field = next(n for n in nodes(app) if isinstance(n, UI.TextEdit) and not n.readonly)
-            assert field.model is old_binding
+            assert field.model.state is old_binding.state and field.model.key == old_binding.key
             assert app.object_by_id(oid)['font_weight'] == 'bold'
             from labelate import render
             from PIL import Image
-            original = render(dumps(app.template), {})
+            original = render(dumps(app.snapshot()), {})
             for angle, start, end in [(0, (60,60), (110,130)), (90, (540,60), (470,110)),
                                       (180, (940,540), (890,470)), (270, (60,940), (130,890))]:
                 app.set_object('x_mm', 5)
@@ -93,6 +99,35 @@ def test_browser_app(tmp_path, monkeypatch):
                 app.pointer_up(SimpleNamespace())
                 assert app.current()['x_mm'] == 10
                 assert app.current()['y_mm'] == 12
+            obj = app.current()
+            # Direct State writes update the form/preview; native numeric bindings retain fractions.
+            app.modified = False
+            obj('x_mm').value = 12.34567
+            await settle()
+            assert obj['x_mm'] == 12.34567
+            assert app.object_inputs[oid]['x_mm'] == '1.235'  # Display unit is cm.
+            assert app.modified
+            app.object_inputs[oid]('x_mm').value = '2.75'
+            assert obj['x_mm'] == 27.5
+            app.object_inputs[oid]('x_mm').value = 'nan'
+            assert obj['x_mm'] == 27.5
+            assert app.object_inputs[oid]['x_mm'] == '2.75'
+            before = app.preview.tobytes()
+            width = obj['width_mm']
+            obj('width_mm').value = 0
+            assert obj['width_mm'] == width
+            assert app.preview.tobytes() == before
+            assert 'positive' in app.status
+            obj('content').value = 'State {state_value}'
+            assert app.template['variables'] == {'state_value': ''}
+            assert app.drafts[oid] == 'State {state_value}'
+            stale = obj('content')
+            assert app.save()
+            app.load_path(download)
+            app.select_object(oid)
+            assert app.object_inputs[oid]['x_mm'] == '2.75'
+            stale.value = 'Must not change the reloaded object'
+            assert app.current()['content'] == 'State {state_value}'
             app.delete()
             assert app.template['variables'] == {}
             asset = tmp_path / 'red.png'
