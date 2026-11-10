@@ -22,13 +22,13 @@ def test_units_and_dimensions(unit):
 
 def test_variables_all_types_and_cleanup():
     template = new_template()
-    for kind in ('text', 'image', 'qr', 'code128'):
+    for kind in ('text', 'qr', 'code128'):
         obj = new_object(kind)
         obj['content'] = '{shared}/{' + kind + '}'
         template['objects'].append(obj)
     template['variables'] = {'shared': 'kept', 'unused': 'removed'}
     reconcile_variables(template)
-    assert variable_names(template) == ['code128', 'image', 'qr', 'shared', 'text']
+    assert variable_names(template) == ['code128', 'qr', 'shared', 'text']
     assert template['variables']['shared'] == 'kept'
     assert 'unused' not in template['variables']
 
@@ -42,6 +42,8 @@ def test_all_objects_and_override(tmp_path):
         obj = new_object(kind)
         obj.update(content={'text': '{name}', 'image': '{asset}', 'qr': '{url}', 'code128': '{sku}'}[kind],
                    x_mm=1, y_mm=i * 14, width_mm=80, height_mm=12)
+        if kind == 'image':
+            obj.update(content='', data=asset.read_bytes(), image_name=asset.name)
         template['objects'].append(obj)
     values = {'name': 'Test', 'asset': str(asset), 'url': 'abc', 'sku': '12345'}
     result = render(dumps(template), values)
@@ -57,7 +59,8 @@ def test_image_path_and_mono(tmp_path):
     Image.new('RGB', (5, 5), 'black').save(path)
     template = new_template()
     obj = new_object('image')
-    obj['content'] = str(path)
+    obj['data'] = path.read_bytes()
+    path.unlink()
     template['objects'].append(obj)
     image = render(dumps(template), {})
     assert image.mode == '1'
@@ -80,8 +83,8 @@ def test_errors():
         dumps(template)
 
 
-@pytest.mark.parametrize('value', ['null', '[]', '{}', '{invalid'])
-def test_bad_json(value):
+@pytest.mark.parametrize('value', [b'null', b'\xc0', b'\x90', b'\x81'])
+def test_bad_msgpack(value):
     with pytest.raises(ValueError):
         loads(value)
 

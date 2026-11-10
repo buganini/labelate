@@ -7,7 +7,6 @@ import PUI.PySide6 as UI
 from PySide6 import QtCore, QtWidgets
 
 from .model import dumps
-from .template_io import asset_fields
 
 
 class CloseGuard(QtCore.QObject):
@@ -52,8 +51,7 @@ def prepare_template(template):
 def save_document(template, path, project_dir):
     document = copy.deepcopy(template)
     for obj in document['objects']:
-        for field in asset_fields(obj):
-            if obj.get(field):
-                obj[field] = os.path.relpath(Path(obj[field]).expanduser().resolve(), Path(path).resolve().parent)
-    Path(path).write_text(dumps(document), encoding='utf-8')
+        if obj['type'] == 'text' and obj.get('font'):
+            obj['font'] = os.path.relpath(Path(obj['font']).expanduser().resolve(), Path(path).resolve().parent)
+    Path(path).write_bytes(dumps(document))
     return f'Saved {path}'

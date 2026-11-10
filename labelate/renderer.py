@@ -1,5 +1,6 @@
 """Pure Pillow rendering; no QApplication or display server required."""
 from pathlib import Path
+from io import BytesIO
 
 import barcode
 import qrcode
@@ -31,7 +32,7 @@ def load_font(path, size):
 def object_image(obj, canvas, values):
     dpi = canvas["dpi"]
     size = (pixels(obj["width_mm"], dpi), pixels(obj["height_mm"], dpi))
-    content = substitute(obj["content"], values)
+    content = substitute(obj["content"], values) if obj["type"] in ("text", "qr", "code128") else ""
     tile = Image.new("RGBA", size, (255, 255, 255, 0))
     kind = obj["type"]
     if kind == "rect":
@@ -61,9 +62,9 @@ def object_image(obj, canvas, values):
                                       (1, shear, -shear * bounds[3], 0, 1, 0),
                                       resample=Image.Resampling.BICUBIC)
     elif kind == "image":
-        if not content:
-            raise ValueError("Choose an image file or enter an image path")
-        source = Path(content).expanduser()
+        if not obj.get("data"):
+            raise ValueError("Choose an image file")
+        source = BytesIO(obj["data"])
         with Image.open(source) as image:
             fitted = ImageOps.contain(image.convert("RGBA"), size, Image.Resampling.LANCZOS)
         tile.alpha_composite(fitted, ((size[0] - fitted.width) // 2, (size[1] - fitted.height) // 2))
@@ -96,14 +97,14 @@ def object_image(obj, canvas, values):
     return tile
 
 
-def render(json_string, variables):
-    """Render a v1 JSON template to RGB or 1-bit PIL.Image.Image.
+def render(lbl_bytes, variables):
+    """Render a v2 MessagePack template to RGB or 1-bit PIL.Image.Image.
 
     Explicit variables override template defaults. Missing variables, invalid
     assets and unrenderable barcodes raise ValueError with object context.
-    Relative image/font paths are resolved against the working directory.
+    Relative font paths are resolved against the working directory.
     """
-    template = loads(json_string)
+    template = loads(lbl_bytes)
     canvas = template["canvas"]
     values = {**template.get("variables", {}), **variables}
     result = Image.new("RGBA", (pixels(canvas["width_mm"], canvas["dpi"]),

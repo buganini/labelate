@@ -29,8 +29,9 @@ Label, Objects, and Variables, in that order.
   share a row. Italic uses a 12-degree slant; bold uses a proportional stroke.
   The color button opens a PUI prompt for a color name or hex value. Text clips
   to its box without automatic wrapping or shrinking.
-- Image objects show a file picker and a read-only path, not a Content editor.
-  Images preserve aspect ratio. JSON references files; Base64 is not supported.
+- Image objects show a file picker and the original filename, not a Content editor.
+  Images preserve aspect ratio and are embedded as raw bytes in the template.
+  Format detection uses file contents; an image filename needs no extension.
 - Rect supports width, height, line width, and corner R in the selected unit.
   It has a black outline and transparent interior; R = 0 gives square corners.
 - Use `{name}` placeholders in text, QR, or Code128 content. Variables are derived
@@ -43,14 +44,9 @@ Label, Objects, and Variables, in that order.
 
 ## Opening and downloading files
 
-- **Open JSON / ZIP** imports a JSON template or a portable template ZIP.
-- **Open folder** imports a folder containing exactly one JSON template and its
-  images, preserving relative paths. A JSON file alone cannot grant the
-  browser access to neighboring files: import the folder/ZIP or reselect assets.
-- **Save JSON** downloads JSON with relative file paths. It does not download
-  assets; use Save ZIP to obtain a complete portable template.
-- **Save ZIP** downloads `label.json` plus referenced image files.
-  This preserves relative references without embedding image bytes in JSON.
+- **Open .lbl** imports a MessagePack template, including its embedded images.
+- **Save .lbl** saves the template and original image bytes in one binary file.
+  Images do not depend on external paths and do not use Base64.
 - **Export PNG** renders at the label's full dimensions/DPI and includes DPI
   metadata. The canvas preview is capped at 1024 × 1024 pixels.
 
@@ -68,24 +64,27 @@ The renderer is also usable outside the browser and does not depend on a GUI:
 from pathlib import Path
 from labelate import render
 
-json_string = Path('examples/product.json').read_text(encoding='utf-8')
-image = render(json_string, {'name': 'Coffee', 'sku': 'ABC123'})
+lbl_bytes = Path('examples/product.lbl').read_bytes()
+image = render(lbl_bytes, {'name': 'Coffee', 'sku': 'ABC123'})
 image.save('label.png', dpi=image.info['dpi'])
 ```
 
-`render(json_string, variables)` returns `PIL.Image.Image`: mode `1` for monochrome
+`render(lbl_bytes, variables)` returns `PIL.Image.Image`: mode `1` for monochrome
 or `RGB` for color. Monochrome uses threshold 128 without dithering. Values override
 saved defaults and are converted to strings. Missing variables, invalid assets,
-and unrenderable codes raise `ValueError`. Relative paths in this string-only API
-resolve against the working directory; the editor resolves imported templates
-against their JSON directory. The browser always uses Noto Sans CJK TC, including when importing JSON with a
-custom font path. The standalone renderer still accepts explicit font paths.
+and unrenderable codes raise `ValueError`. Image bytes are decoded directly.
+Relative font paths in this API resolve against the working directory; the editor
+resolves them against the template directory. The browser always uses Noto Sans
+CJK TC. The standalone renderer accepts explicit font paths.
 
-Version 1 JSON stores geometry in millimetres regardless of `canvas.unit`.
-Font size is in points. Object types are `text`, `image`, `qr`, `code128`, `rect`.
-Image paths are stored in `content`, font paths in `font`. Text options are
+Version 2 uses MessagePack with binary values and the `.lbl` extension. Old JSON
+and ZIP templates are not supported. Geometry is stored in millimetres regardless
+of `canvas.unit`; font size is in points. Object types are `text`, `image`, `qr`,
+`code128`, and `rect`. Images store original bytes in `data` and a display-only
+filename in `image_name`. Font paths remain in `font`. Text options are
 `font_style` and `font_weight`; rectangle options are `stroke_mm` and `radius_mm`.
-See [examples/product.json](examples/product.json) for a complete template.
+Use `labelate.model.loads(lbl_bytes)` and `dumps(template)` to decode and encode.
+See [examples/product.lbl](examples/product.lbl) for a complete template.
 
 ## Desktop app
 
@@ -98,9 +97,9 @@ python3 labelate
 ```
 
 The desktop app uses PUI's PySide6 backend. Text objects have a font path field
-and a Choose font button. JSON saves reference images and fonts relative to the
-selected JSON destination; opening a template resolves those paths against its
-folder. File dialogs save directly to disk. ZIP exports bundle selected assets.
+and a Choose font button. Font paths are saved relative to the selected `.lbl`
+destination and resolved against that folder on opening. Images are embedded;
+fonts remain external files. File dialogs save directly to disk.
 
 ## Local browser build
 
@@ -126,7 +125,8 @@ Open [http://localhost:8868](http://localhost:8868). Do not open `index.html` wi
 `file://`. Deploy `dist/pyodide/` to any HTTPS static host, including a URL subpath.
 
 The Python builder pins the QPUIQ 1.8 source commit and packages only shared/Pyodide
-modules, Labelate, qrcode 8.2, and python-barcode 0.16.1. The JavaScript builder
+modules, Labelate, qrcode 8.2, python-barcode 0.16.1, and msgpack 1.1.2
+(using its pure Python implementation in the browser). The JavaScript builder
 adapts the pinned PUI cookbook bootstrap to start Labelate, loading Pyodide
 314.0.7 and its Pillow package. Source changes are checked against the pinned
 bootstrap, and worker/archive hashes reject mismatched cached assets. PySide6,
@@ -143,8 +143,8 @@ npm run test:browser
 To use an existing Chrome installation locally, set `CHROME_PATH` to its executable.
 Python tests cover rendering, model validation, desktop font selection/saving,
 browser-backend bindings/lifecycle,
-relative paths and safe ZIP imports. Playwright exercises the actual Pyodide app,
-content edits, image imports, and JSON/PNG/ZIP downloads.
+relative font paths and binary image round trips. Playwright exercises the actual Pyodide app,
+content edits, extensionless image imports, .lbl round trips, and PNG downloads.
 
 [Build and deploy Labelate](.github/workflows/pages.yml) runs tests and builds on
 pull requests, pushes to main, and manual dispatch. Each successful build uploads

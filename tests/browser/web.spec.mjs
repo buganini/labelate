@@ -1,7 +1,8 @@
+import {decode} from '@msgpack/msgpack';
 import {test, expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
-test('browser boots, edits, drags and downloads JSON/PNG/ZIP', async ({page}) => {
+test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', msg => { if(msg.type()==='error') errors.push(msg.text()); });
@@ -29,20 +30,21 @@ test('browser boots, edits, drags and downloads JSON/PNG/ZIP', async ({page}) =>
   await page.mouse.down();
   await page.mouse.move(ox+11*scale, oy+13*scale, {steps:4});
   await page.mouse.up();
-  await page.getByRole('button', {name:'Save JSON',exact:true}).click();
+  await page.getByRole('button', {name:'Save .lbl',exact:true}).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('dialog').getByRole('button', {name:'Download',exact:true}).click();
   const downloadPromise = page.waitForEvent('download');
-  await page.locator('.pui-download-card').filter({has:page.getByText('label.json',{exact:true})}).getByRole('link',{name:'Download',exact:true}).click();
+  await page.locator('.pui-download-card').filter({has:page.getByText('label.lbl',{exact:true})}).getByRole('link',{name:'Download',exact:true}).click();
   const download = await downloadPromise;
-  console.log('JSON downloaded');
-  const json = JSON.parse(await readFile(await download.path(),'utf8'));
+  console.log('LBL downloaded');
+  await page.getByRole('button',{name:'Dismiss label.lbl',exact:true}).click();
+  const json = decode(await readFile(await download.path()));
   expect(json.canvas.dpi).toBe(300);
   expect(json.objects[0].content).toBe('標籤 {customer}\n第二行');
   expect(json.variables.customer).toBe('Ada');
   expect(json.objects[0].x_mm).toBeCloseTo(10,0);
   expect(json.objects[0].y_mm).toBeCloseTo(12,0);
-  // Add the remaining renderer types, including a file-backed image.
+  // Add the remaining renderer types, including a embedded image.
   await page.getByRole('button', {name:'Rect',exact:true}).click();
   await expect(page.getByText('Corner R (mm)',{exact:true})).toBeVisible();
   await page.getByRole('button', {name:'QR',exact:true}).click();
@@ -59,12 +61,12 @@ test('browser boots, edits, drags and downloads JSON/PNG/ZIP', async ({page}) =>
   console.log('choosing image');
   await page.getByRole('button', {name:'Choose image…',exact:true}).click();
   await page.locator('dialog input[type=file]').first().setInputFiles({
-    name:'pixel.png',mimeType:'image/png',
-    buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jC2kAAAAASUVORK5CYII=','base64')
+    name:'pixel',mimeType:'image/png',
+    buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP8zwACTGCSAQANHQEDgslx/wAAAABJRU5ErkJggg==','base64')
   });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   console.log('image imported');
-  await expect(page.locator('textarea[readonly]')).not.toHaveValue('');
+  await expect(page.getByText('pixel',{exact:true})).toBeVisible();
   await page.getByRole('button', {name:'Export PNG',exact:true}).click();
   await page.getByRole('dialog').getByRole('button', {name:'Download',exact:true}).click();
   const pngPromise=page.waitForEvent('download');
@@ -72,13 +74,21 @@ test('browser boots, edits, drags and downloads JSON/PNG/ZIP', async ({page}) =>
   const png=await readFile(await (await pngPromise).path());
   expect(png.subarray(1,4).toString()).toBe('PNG');
   console.log('PNG downloaded');
-  await page.getByRole('button', {name:'Save ZIP',exact:true}).click();
+  await page.getByRole('button', {name:'Save .lbl',exact:true}).click();
   await page.getByRole('dialog').getByRole('button', {name:'Download',exact:true}).click();
-  const zipPromise=page.waitForEvent('download');
-  await page.locator('.pui-download-card').filter({has:page.getByText('label.zip',{exact:true})}).getByRole('link',{name:'Download',exact:true}).click();
-  const zip=await readFile(await (await zipPromise).path());
-  expect(zip.subarray(0,2).toString()).toBe('PK');
-  console.log('ZIP downloaded');
+  const lblPromise=page.waitForEvent('download');
+  await page.locator('.pui-download-card').filter({has:page.getByText('label.lbl',{exact:true})}).last().getByRole('link',{name:'Download',exact:true}).click();
+  const lbl=await readFile(await (await lblPromise).path());
+  const saved=decode(lbl);
+  const embedded=saved.objects.find(obj=>obj.type==='image');
+  expect(embedded.data).toBeInstanceOf(Uint8Array);
+  expect(Buffer.from(embedded.data).subarray(1,4).toString()).toBe('PNG');
+  await page.getByRole('button',{name:'Open .lbl',exact:true}).click();
+  await page.locator('dialog input[type=file]').first().setInputFiles({
+    name:'roundtrip.lbl',mimeType:'application/octet-stream',buffer:lbl
+  });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:/image · pixel/})).toBeVisible();
   await page.screenshot({path:'test-results/labelate.png',fullPage:true});
   expect(errors).toEqual([]);
 });

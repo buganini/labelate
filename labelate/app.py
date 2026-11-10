@@ -1,6 +1,5 @@
 """Declarative QPUIQ editor, including its canvas and input controls."""
 import math
-import zipfile
 from pathlib import Path
 
 import PUI.PySide6 as UI
@@ -9,7 +8,7 @@ from PIL import Image, ImageDraw, ImageColor
 from .model import (new_template, new_object, variable_names, reconcile_variables,
                     dumps, display_length, millimetres, LABEL_PRESETS, UNIT_MM)
 from .renderer import render, object_image, pixels
-from .template_io import open_document, write_package
+from .template_io import open_document
 from . import platform
 
 
@@ -94,8 +93,7 @@ class Labelate(UI.Application):
         with UI.Window(title='Labelate — Label Template Editor', size=(1280, 800)).id('window'):
             with UI.VBox().layout(padding=10):
                 with UI.HBox().id('toolbar'):
-                    for title, action in [('New', self.new), ('Open JSON / ZIP', self.open), ('Open folder', self.open_folder),
-                                          ('Save JSON', self.save), ('Save ZIP', self.save_package), ('Export PNG', self.export)]:
+                    for title, action in [('New', self.new), ('Open .lbl', self.open), ('Save .lbl', self.save), ('Export PNG', self.export)]:
                         self.button(title, action)
                     UI.Spacer()
                 with UI.Splitter().id('workspace'):
@@ -141,7 +139,7 @@ class Labelate(UI.Application):
             with UI.VBox():
                 for obj in self.template['objects']:
                     prefix = '● ' if obj['id'] == self.selected else ''
-                    self.button(f"{prefix}{obj['type']} · {obj['content'][:32]}",
+                    self.button(f"{prefix}{obj['type']} · {(obj.get('image_name', '') if obj['type'] == 'image' else obj['content'])[:32]}",
                                 lambda key=obj['id']: self.select_object(key), obj['id'])
                 UI.Spacer()
         obj = self.current()
@@ -166,7 +164,7 @@ class Labelate(UI.Application):
                         lambda v: change('height_mm', millimetres(v, unit)), 'height_mm', .001)
         if obj['type'] == 'image':
             UI.Label('Image file')
-            UI.TextEdit(self.binding(oid + ':image-path', lambda: obj['content'], lambda v: None), readonly=True).id('image-path').layout(height=50)
+            UI.Label(obj.get('image_name') or 'No image selected').id('image-name')
             self.button('Choose image…', self.browse_image)
         elif obj['type'] != 'rect':
             UI.Label('Content')
@@ -351,9 +349,23 @@ class Labelate(UI.Application):
         self.drag = None
 
     def browse_image(self):
-        path = UI.OpenFile(title='Choose image', types={'Images': ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp']})
+        path = UI.OpenFile(title='Choose image', types={'Images': ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'], 'All files': ['*']})
         if path:
-            self.apply_content(str(Path(path).resolve()))
+            try:
+                if Path(path).stat().st_size > 100 * 1024 * 1024:
+                    raise ValueError('Image exceeds 100 MiB')
+                data = Path(path).read_bytes()
+                from io import BytesIO
+                with Image.open(BytesIO(data)) as image:
+                    image.verify()
+                obj = self.current()
+                candidate = dict(obj, data=data, image_name=Path(path).name, content='')
+                updated = dict(self.template, objects=[candidate if item is obj else item for item in self.template['objects']])
+                dumps(updated)
+                obj.update(candidate)
+                self.changed()
+            except (OSError, ValueError) as exc:
+                UI.Warning(str(exc), title='Image error')
 
     def choose_color(self):
         value = UI.Prompt('Enter a color (e.g. #ff0000)', title='Text color', default=self.current().get('color', '#000000'))
@@ -391,30 +403,19 @@ class Labelate(UI.Application):
             self.bindings.clear()
             self.refresh_preview()
             self.notify()
-        except (OSError, ValueError, zipfile.BadZipFile) as exc:
+        except (OSError, ValueError) as exc:
             UI.Warning(str(exc), title='Open error')
 
     def open(self):
         if not self.confirm_discard():
             return
-        path = UI.OpenFile(title='Open template', types=['json', 'zip'])
+        path = UI.OpenFile(title='Open template', types=['lbl'])
         if path:
             self.load_path(path)
 
-    def open_folder(self):
-        if not self.confirm_discard():
-            return
-        folder = UI.OpenDirectory(title='Open template folder')
-        if folder:
-            candidates = sorted(Path(folder).rglob('*.json'))
-            if len(candidates) != 1:
-                UI.Warning('Choose a folder containing exactly one JSON template and its assets.', title='Open folder')
-            else:
-                self.load_path(candidates[0])
-
     def save(self):
         self.commit_content()
-        path = UI.SaveFile(default='label.json', title='Save JSON', types=['json'])
+        path = UI.SaveFile(default='label.lbl', title='Save label', types=['lbl'])
         if not path:
             return False
         try:
@@ -424,21 +425,6 @@ class Labelate(UI.Application):
             return True
         except (OSError, ValueError) as exc:
             UI.Warning(str(exc), title='Save error')
-            return False
-
-    def save_package(self):
-        self.commit_content()
-        path = UI.SaveFile(default='label.zip', title='Save ZIP', types=['zip'])
-        if not path:
-            return False
-        try:
-            write_package(path, self.template, self.project_dir)
-            self.modified = False
-            self.status = 'Template ZIP ready to download, including referenced images.'
-            self.notify()
-            return True
-        except (OSError, ValueError) as exc:
-            UI.Warning(str(exc), title='ZIP export error')
             return False
 
     def export(self):

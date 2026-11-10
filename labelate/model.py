@@ -1,5 +1,5 @@
-"""Versioned JSON model. All physical geometry is stored in millimetres."""
-import json
+"""Versioned MessagePack model. All physical geometry is stored in millimetres."""
+import msgpack
 import math
 import re
 import uuid
@@ -18,24 +18,28 @@ LABEL_PRESETS = {
 
 
 def new_template():
-    return {"version": 1, "canvas": {"width_mm": 100, "height_mm": 60,
+    return {"version": 2, "canvas": {"width_mm": 100, "height_mm": 60,
             "dpi": 300, "mode": "mono", "unit": "mm"}, "objects": [], "variables": {}}
 
 
 def new_object(kind):
     if kind not in KINDS:
         raise ValueError(f"Unknown object type: {kind}")
-    return {"id": uuid.uuid4().hex, "type": kind, "x_mm": 5, "y_mm": 5,
+    obj = {"id": uuid.uuid4().hex, "type": kind, "x_mm": 5, "y_mm": 5,
             "width_mm": 30, "height_mm": 15 if kind != "qr" else 30,
             "content": {"text": "Hello {name}", "image": "", "qr": "https://example.com/{id}",
                         "code128": "{sku}", "rect": ""}[kind],
             "stroke_mm": 0.3, "radius_mm": 0,
             "font": "", "font_size": 12, "font_style": "normal",
             "font_weight": "normal", "color": "#000000"}
+    if kind == "image":
+        obj.update(data=b"", image_name="")
+    return obj
 
 
 def variable_names(template):
     return sorted({name for obj in template["objects"]
+                   if obj["type"] in ("text", "qr", "code128")
                    for name in VARIABLE.findall(obj["content"])})
 
 
@@ -62,7 +66,7 @@ def positive(value, name, allow_zero=False):
 
 def validate(template):
     try:
-        if template["version"] != 1:
+        if template["version"] != 2:
             raise ValueError("Unsupported template version")
         canvas = template["canvas"]
         for key in ("width_mm", "height_mm", "dpi"):
@@ -81,8 +85,11 @@ def validate(template):
             ids.add(obj["id"])
             if obj["type"] not in KINDS or not isinstance(obj["content"], str):
                 raise ValueError("Invalid object type or content")
-            if obj['type'] == 'image' and obj['content'].startswith('data:'):
-                raise ValueError('Embedded images are not supported; choose an image file')
+            if obj['type'] == 'image':
+                if not isinstance(obj.get('data'), bytes) or not isinstance(obj.get('image_name', ''), str):
+                    raise ValueError('Image data must be bytes and image_name must be text')
+                if len(obj['data']) > 100 * 1024 * 1024:
+                    raise ValueError('Image exceeds 100 MiB')
             if obj['type'] == 'rect':
                 positive(obj.get('stroke_mm', 0.3), 'stroke_mm')
                 positive(obj.get('radius_mm', 0), 'radius_mm', allow_zero=True)
@@ -104,15 +111,25 @@ def validate(template):
 
 
 def loads(source):
+    if not isinstance(source, (bytes, bytearray, memoryview)):
+        raise ValueError('Template must be MessagePack bytes (.lbl)')
+    if len(source) > 128 * 1024 * 1024:
+        raise ValueError('Template exceeds 128 MiB')
     try:
-        return validate(json.loads(source))
-    except (json.JSONDecodeError, TypeError) as exc:
-        raise ValueError(f"Invalid template JSON: {exc}") from exc
+        return validate(msgpack.unpackb(source, raw=False, strict_map_key=True))
+    except (ValueError, TypeError, msgpack.exceptions.UnpackException) as exc:
+        raise ValueError(f'Invalid .lbl template: {exc}') from exc
 
 
 def dumps(template):
     validate(template)
-    return json.dumps(template, ensure_ascii=False, indent=2)
+    try:
+        result = msgpack.packb(template, use_bin_type=True)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f'Invalid .lbl template: {exc}') from exc
+    if len(result) > 128 * 1024 * 1024:
+        raise ValueError('Template exceeds 128 MiB')
+    return result
 
 
 def display_length(mm, unit):

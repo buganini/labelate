@@ -9,7 +9,7 @@ license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 description = "A QPUIQ label template editor and Pillow renderer"
 requires-python = ">=3.10"
-dependencies = ["QPUIQ[pyside6]==1.8", "Pillow>=10", "qrcode>=7.4", "python-barcode>=0.15"]
+dependencies = ["QPUIQ[pyside6]==1.8", "Pillow>=10", "qrcode>=7.4", "python-barcode>=0.15", "msgpack==1.1.2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

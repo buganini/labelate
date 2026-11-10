@@ -54,10 +54,10 @@ def test_browser_app(tmp_path, monkeypatch):
             download = tmp_path / 'download-without-extension'
             monkeypatch.setattr(UI, 'SaveFile', lambda **kwargs: str(download))
             assert app.save()
-            assert loads(download.read_text())['objects'][0]['content'] == 'Pending {customer}'
-            legacy = loads(download.read_text())
+            assert loads(download.read_bytes())['objects'][0]['content'] == 'Pending {customer}'
+            legacy = loads(download.read_bytes())
             legacy['objects'][0]['font'] = '/missing/custom.ttf'
-            download.write_text(dumps(legacy))
+            download.write_bytes(dumps(legacy))
             app.load_path(download)
             assert app.template['objects'][0]['font'] == ''
             app.select_object(oid)
@@ -89,9 +89,9 @@ def test_browser_app(tmp_path, monkeypatch):
             app.browse_image()
             await settle()
             assert all(n.readonly for n in nodes(app) if isinstance(n, UI.TextEdit))
-            package = tmp_path / 'label.zip'
+            package = tmp_path / 'label.lbl'
             monkeypatch.setattr(UI, 'SaveFile', lambda **kwargs: str(package))
-            assert app.save_package()
+            assert app.save()
             app.load_path(package)
             assert app.preview.getbbox()
             app.add('rect')

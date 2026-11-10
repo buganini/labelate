@@ -61,23 +61,23 @@ def main():
     wheels = ROOT / '.build/wheels'
     wheels.mkdir(parents=True, exist_ok=True)
     subprocess.run([sys.executable, '-m', 'pip', 'download', '--no-deps', '--only-binary=:all:',
-                    '--dest', str(wheels), 'qrcode==8.2', 'python-barcode==0.16.1'], check=True)
+                    '--dest', str(wheels), 'qrcode==8.2', 'python-barcode==0.16.1', 'msgpack==1.1.2'], check=True)
     with zipfile.ZipFile(output / 'app.zip', 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for directory in ('PUI', 'PUI/_browser', 'PUI/pyodide'):
             for path in sorted((source / directory).glob('*.py')):
                 archive.write(path, path.relative_to(source))
         for path in sorted((ROOT / 'labelate').glob('*.py')):
             archive.writestr(str(path.relative_to(ROOT)), browser_source(path))
-        archive.write(ROOT / 'examples/product.json', 'examples/product.json')
+        archive.write(ROOT / 'examples/product.lbl', 'examples/product.lbl')
         archive.write(ROOT / 'LICENSE', 'LICENSE')
         archive.write(source / 'LICENSE.txt', 'licenses/PUI-MIT.txt')
         for font in fonts:
             archive.write(font, 'labelate/fonts/' + font.name)
-        for pattern in ('qrcode-8.2-*.whl', 'python_barcode-0.16.1-*.whl'):
+        for pattern in ('qrcode-8.2-*.whl', 'python_barcode-0.16.1-*.whl', 'msgpack-1.1.2-*.whl'):
             wheel = next(wheels.glob(pattern))
             with zipfile.ZipFile(wheel) as package:
                 for name in package.namelist():
-                    if not name.endswith('/'):
+                    if not name.endswith(('/', '.so', '.pyd', '.dll')):
                         archive.writestr(name, package.read(name))
     client = ROOT / '.build/pui-client'
     if client.exists():
@@ -93,7 +93,7 @@ def main():
     (output / 'build-info.json').write_text(json.dumps({
         'qpuiq': '1.8', 'pui_commit': PUI_COMMIT, 'pyodide': '314.0.7',
         'qrcode': '8.2', 'python-barcode': '0.16.1', 'license': 'GPL-3.0-only',
-        'font': 'Noto Sans CJK TC Regular 2.004'
+        'font': 'Noto Sans CJK TC Regular 2.004', 'msgpack': '1.1.2'
     }, indent=2) + '\n')
     print(f'Prepared {output}')
 

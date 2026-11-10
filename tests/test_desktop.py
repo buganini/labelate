@@ -28,20 +28,21 @@ def test_desktop_font_and_relative_save(tmp_path, monkeypatch, capsys):
     font_button.ui.click()
     flush()
     assert app.current()['font'] == '/custom/font.ttf'
-    # A JSON-only save does not require the selected font to exist on this machine.
-    target = tmp_path / 'label.json'
+    # A template save does not require the selected font to exist on this machine.
+    target = tmp_path / 'label.lbl'
     monkeypatch.setattr(UI, 'SaveFile', lambda **kwargs: str(target))
     assert app.save()
-    saved = loads(target.read_text())
+    saved = loads(target.read_bytes())
     assert not Path(saved['objects'][0]['font']).is_absolute()
     app.load_path(target)
     assert app.template['objects'][0]['font'] == '/custom/font.ttf'
     asset = tmp_path / 'image.png'
     Image.new('RGB', (8,8), 'red').save(asset)
     app.add('image')
-    app.apply_content(str(asset))
+    monkeypatch.setattr(UI, 'OpenFile', lambda **kwargs: str(asset))
+    app.browse_image()
     assert app.save()
-    assert loads(target.read_text())['objects'][-1]['content'] == 'image.png'
+    assert loads(target.read_bytes())['objects'][-1]['data'] == asset.read_bytes()
     app.modified = False
     app.drafts.clear()
     next(n for n in nodes(app) if isinstance(n, UI.Window)).ui.close()

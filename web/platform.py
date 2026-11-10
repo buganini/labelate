@@ -2,7 +2,6 @@
 from pathlib import Path
 import PUI.pyodide as UI
 from .model import dumps
-from .template_io import portable_document
 
 
 def attach(editor):
@@ -28,8 +27,5 @@ def prepare_template(template):
 
 
 def save_document(template, path, project_dir):
-    document, assets = portable_document(template, project_dir)
-    # Preserve the path allocated by PUI's download registry exactly.
-    Path(path).write_text(dumps(document), encoding='utf-8')
-    return ('JSON ready to download. Use Save ZIP to include referenced images.'
-            if assets else 'JSON ready to download.')
+    Path(path).write_bytes(dumps(template))
+    return 'Label ready to download, including image bytes.'
