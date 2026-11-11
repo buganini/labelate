@@ -98,6 +98,20 @@ def object_image(obj, canvas, values):
     return tile
 
 
+
+def composite_object(result, tile, obj, dpi):
+    # Rotate clockwise about the unrotated object's center.
+    x = round(obj['x_mm'] * dpi / 25.4)
+    y = round(obj['y_mm'] * dpi / 25.4)
+    angle = obj.get('rotation_deg', 0) % 360
+    if angle:
+        original = tile.size
+        tile = tile.rotate(-angle, resample=Image.Resampling.BICUBIC, expand=True)
+        x += round((original[0] - tile.width) / 2)
+        y += round((original[1] - tile.height) / 2)
+    result.alpha_composite(tile, (x, y))
+
+
 def render(lbl_bytes, variables):
     """Render a v2 MessagePack template to RGB or 8-bit greyscale PIL.Image.Image.
 
@@ -115,8 +129,7 @@ def render(lbl_bytes, variables):
     for obj in template["objects"]:
         try:
             tile = object_image(obj, canvas, values)
-            result.alpha_composite(tile, (round(obj["x_mm"] * canvas["dpi"] / 25.4),
-                                         round(obj["y_mm"] * canvas["dpi"] / 25.4)))
+            composite_object(result, tile, obj, canvas["dpi"])
         except Exception as exc:
             raise ValueError(f"Object {obj['id']} ({obj['type']}): {exc}") from exc
     result = result.rotate(-canvas.get("rotation", 0), expand=True)

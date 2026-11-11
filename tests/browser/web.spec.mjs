@@ -47,9 +47,9 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   const scale = Math.min((bounds.width-100)/60, (bounds.height-100)/100);
   const ox = bounds.x+(bounds.width-60*scale)/2;
   const oy = bounds.y+(bounds.height-100*scale)/2;
-  await page.mouse.move(ox+6*scale, oy+6*scale);
+  await page.mouse.move(ox+10*scale, oy+10*scale);
   await page.mouse.down();
-  await page.mouse.move(ox+11*scale, oy+13*scale, {steps:4});
+  await page.mouse.move(ox+15*scale, oy+17*scale, {steps:4});
   await page.mouse.up();
   await page.getByRole('button', {name:'Save .lbl',exact:true}).click();
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -117,5 +117,37 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Image',exact:true}).last()).toBeVisible();
   await page.screenshot({path:'test-results/labelate.png',fullPage:true});
+  expect(errors).toEqual([]);
+});
+
+test('canvas corner resize and rotation persist in LBL', async ({page}) => {
+  const errors=[];
+  page.on('pageerror', error=>errors.push(String(error)));
+  await page.goto('/');
+  await expect(page.getByRole('button',{name:'Rect',exact:true})).toBeVisible({timeout:120000});
+  await page.getByRole('button',{name:'Rect',exact:true}).click();
+  const bounds=await page.locator('canvas').first().boundingBox();
+  const scale=Math.min((bounds.width-100)/100,(bounds.height-100)/60);
+  const ox=bounds.x+(bounds.width-100*scale)/2;
+  const oy=bounds.y+(bounds.height-60*scale)/2;
+  await page.mouse.move(ox+35*scale,oy+20*scale);
+  await page.mouse.down();
+  await page.mouse.move(ox+45*scale,oy+25*scale,{steps:5});
+  await page.mouse.up();
+  // Resize keeps the top-left fixed; the center is now (25, 15).
+  await page.mouse.move(ox+25*scale,oy+5*scale-24);
+  await page.mouse.down();
+  await page.mouse.move(ox+35*scale+24,oy+15*scale,{steps:5});
+  await page.mouse.up();
+  await page.getByRole('button',{name:'Save .lbl',exact:true}).click();
+  await page.getByRole('dialog').getByRole('button',{name:'Download',exact:true}).click();
+  const pending=page.waitForEvent('download');
+  await page.locator('.pui-download-card').getByRole('link',{name:'Download',exact:true}).click();
+  const saved=decode(await readFile(await (await pending).path()));
+  const obj=saved.objects[0];
+  expect(obj.width_mm).toBeCloseTo(40,0);
+  expect(obj.height_mm).toBeCloseTo(20,0);
+  expect(obj.rotation_deg).toBeCloseTo(90,0);
+  expect([obj.x_mm,obj.y_mm]).toEqual([5,5]);
   expect(errors).toEqual([]);
 });

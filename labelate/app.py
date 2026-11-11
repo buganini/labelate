@@ -9,10 +9,10 @@ from PIL import Image, ImageDraw, ImageColor
 
 from .model import (new_template, new_object, variable_names, reconcile_variables,
                     dumps, display_length, millimetres, UNIT_MM)
-from .renderer import render, object_image, pixels
+from .renderer import render, object_image, pixels, composite_object
 from .template_io import open_document
 from .data_import import read_data
-from .geometry import view_size, view_box, from_view
+from .geometry import view_size, object_corners, object_point, contains_point, resize_corner, rotate_vector
 from . import platform
 
 
@@ -89,7 +89,7 @@ class Labelate(UI.Application):
             obj(key).change(lambda value, item=obj: self.object_state_changed(item))
         return obj
 
-    NUMBER_FIELDS = ('x_mm', 'y_mm', 'width_mm', 'height_mm', 'stroke_mm', 'radius_mm', 'font_size')
+    NUMBER_FIELDS = ('x_mm', 'y_mm', 'width_mm', 'height_mm', 'stroke_mm', 'radius_mm', 'font_size', 'rotation_deg')
 
     def object_number_text(self, obj, key):
         value = obj[key]
@@ -111,8 +111,8 @@ class Labelate(UI.Application):
             return
         try:
             value = float(text)
-            minimum = 0 if key in ('x_mm', 'y_mm', 'radius_mm') else 1 if key == 'font_size' else .001
-            maximum = 1000 if key == 'font_size' else 10000
+            minimum = 0 if key in ('x_mm', 'y_mm', 'radius_mm', 'rotation_deg') else 1 if key == 'font_size' else .001
+            maximum = 360 if key == 'rotation_deg' else 1000 if key == 'font_size' else 10000
             if not math.isfinite(value) or not minimum <= value <= maximum:
                 raise ValueError(f'{key} must be between {minimum} and {maximum}')
             if key.endswith('_mm'):
@@ -549,6 +549,8 @@ class Labelate(UI.Application):
             self.object_number(f'Y ({unit})', obj, 'y_mm').layout(width=40, minWidth=40)
             self.object_number(f'W ({unit})', obj, 'width_mm').layout(width=40, minWidth=40)
             self.object_number(f'H ({unit})', obj, 'height_mm').layout(width=40, minWidth=40)
+        with UI.HBox():
+            self.object_number('Rotation (°)', obj, 'rotation_deg').layout(width=60)
         if obj['type'] == 'image':
             with UI.HBox():
                 UI.Label('Image')
@@ -659,12 +661,12 @@ class Labelate(UI.Application):
                 errors.append(f"{OBJECT_NAMES[obj['type']]}: {exc}")
                 tile = Image.new('RGBA', (pixels(obj['width_mm'], canvas['dpi']), pixels(obj['height_mm'], canvas['dpi'])), '#ffe4e6')
                 ImageDraw.Draw(tile).rectangle((0, 0, tile.width-1, tile.height-1), outline='red', width=2)
-            result.alpha_composite(tile, (round(obj['x_mm'] * canvas['dpi'] / 25.4), round(obj['y_mm'] * canvas['dpi'] / 25.4)))
+            composite_object(result, tile, obj, canvas['dpi'])
         if canvas['mode'] == 'greyscale' and not errors:
             result = result.convert('L').convert('RGBA')
         result.thumbnail((1024, 1024), Image.Resampling.NEAREST)
         self.preview = result
-        self.status = ' | '.join(errors) if errors else f"{size[0]} × {size[1]} px · {canvas['dpi']} DPI · {canvas.get('rotation', 0)}° view · Drag objects to position them"
+        self.status = ' | '.join(errors) if errors else f"{size[0]} × {size[1]} px · {canvas['dpi']} DPI · {canvas.get('rotation', 0)}° view · Drag to move · Corners resize · Top handle rotates"
 
     def paint(self, canvas):
         c = self.template['canvas']
@@ -680,26 +682,47 @@ class Labelate(UI.Application):
         canvas.drawImage(resource, x, y, w, h)
         obj = self.current()
         if obj:
-            canvas.push()
-            canvas.clipRect(x, y, w, h)
-            left, top, right, bottom = view_box(obj, c)
-            canvas.drawRect(x+left*scale, y+top*scale, x+right*scale, y+bottom*scale, stroke=0x2563eb, width=2)
-            canvas.pop()
+            corners, rotation = self.transform_handles(obj)
+            for start, end in zip(corners, corners[1:] + corners[:1]):
+                canvas.drawLine(*start, *end, color=0x2563eb, width=2)
+            top = ((corners[0][0] + corners[1][0]) / 2, (corners[0][1] + corners[1][1]) / 2)
+            canvas.drawLine(*top, *rotation, color=0x2563eb, width=2)
+            for hx, hy in corners:
+                canvas.drawRect(hx-4, hy-4, hx+4, hy+4, fill=0xffffff, stroke=0x2563eb, width=2)
+            canvas.drawEllipse(*rotation, 5, 5, fill=0x2563eb)
+
+    def transform_handles(self, obj):
+        x, y, scale = self.viewport
+        corners = [(x + px * scale, y + py * scale) for px, py in object_corners(obj)]
+        top = object_point(obj, .5, 0)
+        dx, dy = rotate_vector(0, -24, obj.get('rotation_deg', 0))
+        return corners, (x + top[0] * scale + dx, y + top[1] * scale + dy)
 
     def pointer_down(self, event):
         if event.button != 1:
             return
         x, y, scale = self.viewport
-        c = self.template['canvas']
-        mx, my = from_view((event.x-x)/scale, (event.y-y)/scale, c)
+        mx, my = (event.x-x)/scale, (event.y-y)/scale
+        obj = self.current()
+        self.drag = None
+        if obj:
+            corners, rotation = self.transform_handles(obj)
+            if math.hypot(event.x-rotation[0], event.y-rotation[1]) <= 8:
+                cx, cy = object_point(obj, .5, .5)
+                self.drag = dict(mode='rotate', original=Unstate(obj),
+                                 start=math.degrees(math.atan2(my-cy, mx-cx)))
+                return
+            for corner, (hx, hy) in enumerate(corners):
+                if math.hypot(event.x-hx, event.y-hy) <= 7:
+                    self.drag = dict(mode='resize', original=Unstate(obj), corner=corner)
+                    return
+        vw, vh = view_size(self.template['canvas'])
         hit = None
-        vw, vh = view_size(c)
         if 0 <= mx <= vw and 0 <= my <= vh:
-            hit = next((o for o in reversed(self.template['objects']) if
-                        o['x_mm'] <= mx <= o['x_mm']+o['width_mm'] and
-                        o['y_mm'] <= my <= o['y_mm']+o['height_mm']), None)
+            hit = next((o for o in reversed(self.template['objects']) if contains_point(o, mx, my)), None)
         self.selected = hit['id'] if hit else None
-        self.drag = (mx-hit['x_mm'], my-hit['y_mm']) if hit else None
+        if hit:
+            self.drag = dict(mode='move', offset=(mx-hit['x_mm'], my-hit['y_mm']))
         self.notify()
 
     def pointer_move(self, event):
@@ -707,12 +730,30 @@ class Labelate(UI.Application):
         if self.drag is None or obj is None:
             return
         x, y, scale = self.viewport
-        c = self.template['canvas']
-        mx, my = from_view((event.x-x)/scale, (event.y-y)/scale, c)
-        vw, vh = view_size(c)
+        mx, my = (event.x-x)/scale, (event.y-y)/scale
+        mode = self.drag['mode']
+        if mode == 'rotate':
+            original = self.drag['original']
+            cx, cy = object_point(original, .5, .5)
+            angle = math.degrees(math.atan2(my-cy, mx-cx))
+            updates = {'rotation_deg': (original.get('rotation_deg', 0) + angle - self.drag['start']) % 360}
+        elif mode == 'resize':
+            updates = resize_corner(self.drag['original'], self.drag['corner'], mx, my)
+        else:
+            vw, vh = view_size(self.template['canvas'])
+            dx, dy = self.drag['offset']
+            updates = dict(x_mm=max(0, min(max(0, vw-obj['width_mm']), mx-dx)),
+                           y_mm=max(0, min(max(0, vh-obj['height_mm']), my-dy)))
+        candidate = {**Unstate(obj), **updates}
+        try:
+            snapshot = self.snapshot()
+            snapshot['objects'] = [candidate if item['id'] == obj['id'] else item for item in snapshot['objects']]
+            dumps(snapshot)
+        except ValueError:
+            return
         with self.state:
-            obj['x_mm'] = max(0, min(max(0, vw-obj['width_mm']), mx-self.drag[0]))
-            obj['y_mm'] = max(0, min(max(0, vh-obj['height_mm']), my-self.drag[1]))
+            for key, value in updates.items():
+                obj[key] = value
 
     def pointer_up(self, event):
         self.drag = None

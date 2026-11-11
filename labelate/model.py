@@ -29,7 +29,7 @@ def new_object(kind):
             "width_mm": 30, "height_mm": 15 if kind != "qr" else 30,
             "content": {"text": "SN: {SN}", "image": "", "qr": "https://example.com/{id}",
                         "code128": "{sku}", "rect": ""}[kind],
-            "stroke_mm": 0.3, "radius_mm": 0,
+            "stroke_mm": 0.3, "radius_mm": 0, "rotation_deg": 0,
             "font": "", "font_index": 0, "font_size": 12, "font_style": "normal",
             "font_weight": "normal", "color": "#000000"}
     if kind == "image":
@@ -92,6 +92,9 @@ def validate(template):
             ids.add(obj["id"])
             if obj["type"] not in KINDS or not isinstance(obj["content"], str):
                 raise ValueError("Invalid object type or content")
+            angle = obj.get('rotation_deg', 0)
+            if isinstance(angle, bool) or not isinstance(angle, (int, float)) or not math.isfinite(angle) or not 0 <= angle <= 360:
+                raise ValueError("Object rotation must be between 0 and 360 degrees")
             if obj['type'] == 'image':
                 if not isinstance(obj.get('data'), bytes):
                     raise ValueError('Image data must be bytes')
@@ -104,6 +107,13 @@ def validate(template):
                 positive(obj[key], key, key in ("x_mm", "y_mm"))
             if round(obj["width_mm"] * canvas["dpi"] / 25.4) * round(obj["height_mm"] * canvas["dpi"] / 25.4) > 40_000_000:
                 raise ValueError("Object exceeds 40 million pixels")
+            radians = math.radians(angle)
+            w = max(1, round(obj['width_mm'] * canvas['dpi'] / 25.4))
+            h = max(1, round(obj['height_mm'] * canvas['dpi'] / 25.4))
+            rotated_w = math.ceil(abs(w * math.cos(radians)) + abs(h * math.sin(radians))) + 2
+            rotated_h = math.ceil(abs(w * math.sin(radians)) + abs(h * math.cos(radians))) + 2
+            if angle % 360 and rotated_w * rotated_h > 40_000_000:
+                raise ValueError("Rotated object exceeds 40 million pixels")
             if obj["type"] == "text":
                 if type(obj.get("font_index", 0)) is not int or not 0 <= obj.get("font_index", 0) < 256:
                     raise ValueError("Invalid font collection index")

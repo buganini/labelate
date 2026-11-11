@@ -276,3 +276,11 @@ to a Pillow-readable font file; collection fonts also store a zero-based
 `font_index`. Manual font-file selection remains available. The web version
 continues to use bundled Noto Sans CJK TC. PUI is pinned to commit
 `c4358175115bc2da8d1859e07ecb0e0e85ebc457` for FontComboBox support.
+
+Selected objects have four corner resize handles and a rotation handle above the
+top edge. Drag inside an object to move it, drag a corner to resize its box, or drag
+the top handle to rotate clockwise about its center. The Rotation (°) field also
+accepts an exact angle. Text box resizing retains the font size; use Size to change
+the text size. Object angles are stored as `rotation_deg` (default 0 for older
+files) and apply to preview, PNG export, and printing. Label Rotation remains a
+separate workspace setting. Content outside the label is clipped.
