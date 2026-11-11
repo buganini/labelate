@@ -175,7 +175,7 @@ class Labelate(UI.Application):
             'label:unit': unit,
             'label:rotation': str(canvas.get('rotation', 0)),
             'label:mode': canvas['mode'].title(),
-            'brand': self.brand or 'Select brand…',
+            'brand': self.brand,
             'printer': self.printer_choice,
             'print-settings': self.settings_open,
             'printer-settings:printer-model': self.settings_draft.get('model', ''),
@@ -347,7 +347,6 @@ class Labelate(UI.Application):
             UI.Label("Output")
             with UI.ComboBox(text_model=self.input_state('brand', self.set_brand),
                              disabled=self.busy).id('printer-brand'):
-                UI.ComboBoxItem('Select brand…')
                 for brand in (('File', 'Brother', 'Niim', 'TSC') if platform.PRINTING else ('File',)):
                     UI.ComboBoxItem(brand)
             with UI.ComboBox(text_model=self.input_state('printer', self.set_printer),
