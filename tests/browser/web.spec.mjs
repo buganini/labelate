@@ -18,7 +18,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await content.fill('標籤 {customer}\n第二行');
   await content.press('Tab');
   await expect(page.getByRole('tabpanel',{name:'Label'}).getByText('customer',{exact:true})).toBeVisible();
-  const customer = page.locator('.pui-HBox').filter({has:page.getByText('customer',{exact:true})}).last().locator('input');
+  const customer = page.locator('.pui-Grid').filter({has:page.getByText('customer',{exact:true})}).locator('input');
   await customer.fill('Ada');
   await customer.press('Tab');
   console.log('checking export controls');

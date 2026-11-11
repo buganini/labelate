@@ -574,10 +574,10 @@ class Labelate(UI.Application):
     def variables_panel(self):
         UI.Label('Variables').style(fontWeight=700)
         names = variable_names(self.template)
-        for name in names:
-            with UI.HBox().id('variable-' + name):
-                UI.Label(name)
-                UI.TextField(self.input_state('variable:' + name, lambda v, k=name: self.set_variable(k, v))).id(name)
+        with UI.Grid().id('variables-grid'):
+            for row, name in enumerate(names):
+                UI.Label(name).grid(row=row, column=0)
+                UI.TextField(self.input_state('variable:' + name, lambda v, k=name: self.set_variable(k, v))).grid(row=row, column=1).id(name)
         if not names:
             UI.Label('Use {name} in object content.')
 
