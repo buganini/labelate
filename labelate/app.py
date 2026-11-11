@@ -545,12 +545,11 @@ class Labelate(UI.Application):
         def change(key, value):
             self.set_object(key, value, oid)
         with UI.HBox():
-            self.object_number(f'X ({unit})', obj, 'x_mm').layout(width=40, minWidth=40)
-            self.object_number(f'Y ({unit})', obj, 'y_mm').layout(width=40, minWidth=40)
-            self.object_number(f'W ({unit})', obj, 'width_mm').layout(width=40, minWidth=40)
-            self.object_number(f'H ({unit})', obj, 'height_mm').layout(width=40, minWidth=40)
-        with UI.HBox():
-            self.object_number('Rotation (°)', obj, 'rotation_deg').layout(width=60)
+            self.object_number('X', obj, 'x_mm').layout(width=60)
+            self.object_number('Y', obj, 'y_mm').layout(width=60)
+            self.object_number('W', obj, 'width_mm').layout(width=60)
+            self.object_number('H', obj, 'height_mm').layout(width=60)
+            self.object_number('R', obj, 'rotation_deg').layout(width=60)
         if obj['type'] == 'image':
             with UI.HBox():
                 UI.Label('Image')
