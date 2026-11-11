@@ -527,8 +527,6 @@ class Labelate(UI.Application):
     def object_properties(self, obj):
         unit, oid = self.template['canvas']['unit'], obj['id']
         self.binding_scope = oid
-        def change(key, value):
-            self.set_object(key, value, oid)
         with UI.HBox():
             UI.Label('X')
             UI.TextField(self.object_inputs[oid]('x_mm')).id('x_mm').layout(width=75, minWidth=48)
@@ -555,7 +553,7 @@ class Labelate(UI.Application):
                 UI.Label(f'Corner R ({unit})')
                 UI.TextField(self.object_inputs[oid]('radius_mm')).id('radius_mm').layout(minWidth=48)
         if obj['type'] == 'text':
-            platform.font_controls(self, obj, change)
+            platform.font_controls(self, obj, lambda key, value: self.set_object(key, value, oid))
             with UI.HBox().id('typography-row'):
                 UI.Label('Size')
                 UI.TextField(self.object_inputs[oid]('font_size')).id('font_size').layout(width=60, minWidth=48)
@@ -664,7 +662,7 @@ class Labelate(UI.Application):
             composite_object(result, tile, obj, canvas['dpi'])
         if canvas['mode'] == 'greyscale' and not errors:
             result = result.convert('L').convert('RGBA')
-        result.thumbnail((1024, 1024), Image.Resampling.NEAREST)
+        result.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
         self.preview = result
         self.status = ' | '.join(errors) if errors else f"{size[0]} × {size[1]} px · {canvas['dpi']} DPI · {canvas.get('rotation', 0)}° view · Drag to move · Corners resize · Top handle rotates"
 
@@ -870,4 +868,8 @@ class Labelate(UI.Application):
 
 
 def main():
-    return Labelate().start()
+    import sys
+    app = Labelate()
+    if len(sys.argv) > 1:
+        app.load_path(sys.argv[1])
+    return app.start()
