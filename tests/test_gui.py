@@ -91,7 +91,7 @@ def test_browser_app(tmp_path, monkeypatch):
                 dimensions = original.size[::-1] if angle in (90, 270) else original.size
                 expected = Image.new('RGBA', dimensions, 'white')
                 expected.alpha_composite(original.convert('RGBA'))
-                expected.thumbnail((1024, 1024), Image.Resampling.NEAREST)
+                expected.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
                 assert app.preview.size == expected.size
                 assert app.preview.tobytes() == expected.tobytes()
                 app.viewport = (0, 0, 10)
