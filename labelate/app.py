@@ -230,8 +230,9 @@ class Labelate(UI.Application):
                 with UI.Tabs(model=self.state('active_tab')).id('tabs').layout(weight=1):
                     with UI.Tab('Label').id('Label'):
                         with UI.HBox().id('toolbar'):
-                            for title, action in [('New', self.new), ('Open .lbl', self.open), ('Save .lbl', self.save)]:
-                                self.button(title, action)
+                            self.button('New', self.new)
+                            self.button('Open .lbl', self.open)
+                            self.button('Save .lbl', self.save)
                             UI.Spacer()
                         with UI.Splitter().id('workspace'):
                             UI.Canvas(self.paint).id('canvas').layout(width=720, minWidth=240, minHeight=300).mousedown(self.pointer_down).mousemove(self.pointer_move).mouseup(self.pointer_up)
