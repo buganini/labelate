@@ -91,6 +91,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   console.log('image imported');
+  await expect(page.getByText('pixel',{exact:true})).toBeVisible();
   await expect(page.getByRole('button', {name:'Choose image…',exact:true})).toBeVisible();
   await page.getByRole('button', {name:'Print Single Label',exact:true}).click();
   await page.getByRole('dialog').getByRole('button', {name:'Download',exact:true}).click();
@@ -109,6 +110,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   const saved=decode(lbl);
   const embedded=saved.objects.find(obj=>obj.type==='image');
   expect(embedded.data).toBeInstanceOf(Uint8Array);
+  expect(embedded.image_name).toBe('pixel');
   expect(Buffer.from(embedded.data).subarray(1,4).toString()).toBe('PNG');
   await page.getByRole('button',{name:'Open .lbl',exact:true}).click();
   await page.locator('dialog input[type=file]').first().setInputFiles({

@@ -542,6 +542,7 @@ class Labelate(UI.Application):
         if obj['type'] == 'image':
             with UI.HBox():
                 UI.Label('Image')
+                UI.Label(obj.get('image_name', '')).id('image-name')
                 self.button('Choose image…', self.browse_image)
         elif obj['type'] != 'rect':
             UI.Label('Content')
@@ -766,7 +767,7 @@ class Labelate(UI.Application):
                 with Image.open(BytesIO(data)) as image:
                     image.verify()
                 obj = self.current()
-                candidate = dict(obj, data=data, content='')
+                candidate = dict(obj, data=data, image_name=Path(path).name, content='')
                 updated = dict(self.snapshot(), objects=[candidate if item is obj else Unstate(item) for item in self.state.objects])
                 dumps(updated)
                 with self.state:

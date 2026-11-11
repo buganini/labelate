@@ -33,7 +33,7 @@ def new_object(kind):
             "font": "", "font_index": 0, "font_size": 12, "font_style": "normal",
             "font_weight": "normal", "color": "#000000"}
     if kind == "image":
-        obj.update(data=b"")
+        obj.update(data=b"", image_name="")
     return obj
 
 

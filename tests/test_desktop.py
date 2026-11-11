@@ -52,6 +52,9 @@ def test_desktop_font_and_relative_save(tmp_path, monkeypatch, capsys):
     app.browse_image()
     assert app.save()
     assert loads(target.read_bytes())['objects'][-1]['data'] == asset.read_bytes()
+    assert loads(target.read_bytes())['objects'][-1]['image_name'] == 'image.png'
+    flush()
+    assert next(n for n in nodes(app) if n._id == 'image-name').text == 'image.png'
     from labelate import printing
     import time
     device = printing.Printer('TSC', 'test', 'pyusb', 'Test printer')
