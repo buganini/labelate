@@ -1,6 +1,6 @@
 # Labelate
 
-A label template editor built with **QPUIQ 1.8 + FontComboBox** and Pillow, supporting a
+A label template editor built with **QPUIQ 1.9** and Pillow, supporting a
 **PySide6 desktop app** and a **Pyodide browser build**. The desktop source imports
 PySide6 directly; the static build changes that import to Pyodide. There is no
 runtime backend selector. Browser Python runs in a worker without an app server.
@@ -196,7 +196,7 @@ python -m pip install -e '.[dev]'
 npm ci
 mkdir -p .build
 git clone https://github.com/buganini/PUI.git .build/PUI
-git -C .build/PUI checkout c4358175115bc2da8d1859e07ecb0e0e85ebc457
+git -C .build/PUI checkout e7c1886ddbfecd37b7af32bcb8e057e4f64d5303
 python scripts/build_pyodide.py
 npm run build
 python3 -m http.server 8868 --directory dist/pyodide
@@ -205,7 +205,7 @@ python3 -m http.server 8868 --directory dist/pyodide
 Open [http://localhost:8868](http://localhost:8868). Do not open `index.html` with
 `file://`. Deploy `dist/pyodide/` to any HTTPS static host, including a URL subpath.
 
-The Python builder pins the QPUIQ 1.8 + FontComboBox source commit and packages only shared/Pyodide
+The Python builder pins the QPUIQ 1.9 source commit and packages only shared/Pyodide
 modules, Labelate, qrcode 8.2, python-barcode 0.16.1, and msgpack 1.1.2
 (using its pure Python implementation in the browser). The JavaScript builder
 adapts the pinned PUI cookbook bootstrap to start Labelate, loading Pyodide
@@ -275,7 +275,7 @@ Desktop font selection uses PUI FontComboBox. The selected system family is reso
 to a Pillow-readable font file; collection fonts also store a zero-based
 `font_index`. Manual font-file selection remains available. The web version
 continues to use bundled Noto Sans CJK TC. PUI is pinned to commit
-`c4358175115bc2da8d1859e07ecb0e0e85ebc457` for FontComboBox support.
+`e7c1886ddbfecd37b7af32bcb8e057e4f64d5303` for the QPUIQ 1.9 release.
 
 Selected objects have four corner resize handles and a rotation handle above the
 top edge. Drag inside an object to move it, drag a corner to resize its box, or drag

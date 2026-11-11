@@ -10,7 +10,7 @@ from urllib.request import urlopen
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PUI_COMMIT = 'c4358175115bc2da8d1859e07ecb0e0e85ebc457'  # FontComboBox support after 1.8
+PUI_COMMIT = 'e7c1886ddbfecd37b7af32bcb8e057e4f64d5303'  # QPUIQ 1.9 release
 FONT_BASE = 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/'
 
 
@@ -53,7 +53,7 @@ def main():
     source = args.pui_source.resolve()
     commit = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
     if commit != PUI_COMMIT:
-        parser.error(f'PUI source must be pinned to {PUI_COMMIT} (QPUIQ 1.8 + FontComboBox)')
+        parser.error(f'PUI source must be pinned to {PUI_COMMIT} (QPUIQ 1.9)')
     subprocess.run(['git', '-C', str(source), 'diff', '--exit-code', 'HEAD', '--', 'PUI', 'browser-client'], check=True)
     output = ROOT / 'dist/pyodide'
     output.mkdir(parents=True, exist_ok=True)
@@ -92,7 +92,7 @@ def main():
     shutil.copyfile(ROOT / '.build/fonts/OFL.txt', output / 'FONT-LICENSE.txt')
     (output / '.nojekyll').touch()
     (output / 'build-info.json').write_text(json.dumps({
-        'qpuiq': '1.8', 'pui_commit': PUI_COMMIT, 'pyodide': '314.0.7',
+        'qpuiq': '1.9', 'pui_commit': PUI_COMMIT, 'pyodide': '314.0.7',
         'qrcode': '8.2', 'python-barcode': '0.16.1', 'license': 'GPL-3.0-only',
         'font': 'Noto Sans CJK TC Regular 2.004', 'msgpack': '1.1.2', 'openpyxl': '3.1.5', 'et-xmlfile': '2.0.0'
     }, indent=2) + '\n')
