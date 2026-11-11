@@ -26,7 +26,7 @@ in the PySide6 desktop app. The **Data** tab holds editable rows for batch print
   Rotation is saved in `canvas.rotation` (default 0 for older templates).
   `render()`, PNG exports, and printing compose the oriented canvas first,
   then rotate the complete image by `-rotation` back to the physical label size.
-- Add Text, Image, QR, Code128, or Rect. Select objects in the list or canvas and
+- Add Text, Image, QR, Code128, or Rect. Select objects on the canvas and
   drag to position them. X/Y/W/H share one row. Delete selected appears
   only when an object is selected. Later objects render over earlier objects.
 - Text content commits on blur. The desktop app offers a system font picker and font-file selection;

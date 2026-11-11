@@ -523,13 +523,6 @@ class Labelate(UI.Application):
             UI.Spacer()
             if self.current():
                 self.button('Delete selected', self.delete)
-        with UI.Scroll().id('object-list').layout(height=125):
-            with UI.VBox():
-                for obj in self.template['objects']:
-                    prefix = '● ' if obj['id'] == self.selected else ''
-                    self.button(f"{prefix}{OBJECT_NAMES[obj['type']]}" if obj['type'] == 'image' else f"{prefix}{OBJECT_NAMES[obj['type']]} · {obj['content'][:32]}",
-                                lambda key=obj['id']: self.select_object(key), obj['id'])
-                UI.Spacer()
         obj = self.current()
         if obj:
             with UI.VBox().id('properties-' + obj['id']):
