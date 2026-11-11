@@ -16,7 +16,7 @@ from .geometry import view_size, object_corners, object_point, contains_point, r
 from . import platform
 
 
-OBJECT_NAMES = {'text': 'Text', 'image': 'Image', 'qr': 'QR', 'code128': 'Code128', 'rect': 'Rect'}
+OBJECT_TYPES = ['Text', 'Image', 'QR', 'Code128', 'Rect']
 
 
 class Labelate(UI.Application):
@@ -514,8 +514,8 @@ class Labelate(UI.Application):
     def objects_panel(self):
         UI.Label('Objects').style(fontWeight=700)
         with UI.HBox().id('object-toolbar'):
-            for kind, label in OBJECT_NAMES.items():
-                self.button(label, lambda k=kind: self.add(k))
+            for name in OBJECT_TYPES:
+                self.button(name, lambda k=name.lower(): self.add(k))
             UI.Spacer()
             if self.current():
                 self.button('Delete selected', self.delete)
@@ -531,13 +531,13 @@ class Labelate(UI.Application):
             self.set_object(key, value, oid)
         with UI.HBox():
             UI.Label('X')
-            UI.TextField(self.object_inputs[oid]('x_mm')).id('x_mm').layout(width=60, minWidth=48)
+            UI.TextField(self.object_inputs[oid]('x_mm')).id('x_mm').layout(width=75, minWidth=48)
             UI.Label('Y')
-            UI.TextField(self.object_inputs[oid]('y_mm')).id('y_mm').layout(width=60, minWidth=48)
+            UI.TextField(self.object_inputs[oid]('y_mm')).id('y_mm').layout(width=75, minWidth=48)
             UI.Label('W')
-            UI.TextField(self.object_inputs[oid]('width_mm')).id('width_mm').layout(width=60, minWidth=48)
+            UI.TextField(self.object_inputs[oid]('width_mm')).id('width_mm').layout(width=75, minWidth=48)
             UI.Label('H')
-            UI.TextField(self.object_inputs[oid]('height_mm')).id('height_mm').layout(width=60, minWidth=48)
+            UI.TextField(self.object_inputs[oid]('height_mm')).id('height_mm').layout(width=75, minWidth=48)
             UI.Label('R')
             UI.TextField(self.object_inputs[oid]('rotation_deg')).id('rotation_deg').layout(width=60, minWidth=48)
         if obj['type'] == 'image':
@@ -657,7 +657,8 @@ class Labelate(UI.Application):
             try:
                 tile = object_image(obj, canvas, self.template['variables'])
             except Exception as exc:
-                errors.append(f"{OBJECT_NAMES[obj['type']]}: {exc}")
+                name = next(t for t in OBJECT_TYPES if t.lower() == obj['type'])
+                errors.append(f"{name}: {exc}")
                 tile = Image.new('RGBA', (pixels(obj['width_mm'], canvas['dpi']), pixels(obj['height_mm'], canvas['dpi'])), '#ffe4e6')
                 ImageDraw.Draw(tile).rectangle((0, 0, tile.width-1, tile.height-1), outline='red', width=2)
             composite_object(result, tile, obj, canvas['dpi'])
