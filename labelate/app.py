@@ -31,7 +31,7 @@ class Labelate(UI.Application):
         self.accepted_objects = {}
         self.state.active_tab = 'Label'
         self.state('active_tab').change(lambda value: self.commit_content())
-        self.brand = 'Export'
+        self.brand = 'File'
         self.printers = []
         self.printer_choice = 'PNG'
         self.state.copies = '1'
@@ -344,19 +344,20 @@ class Labelate(UI.Application):
         with UI.HBox().id('message-bar'):
             UI.Label(self.print_message or self.status).id('status').layout(weight=1)
             UI.Spacer()
+            UI.Label("Output")
             with UI.ComboBox(text_model=self.input_state('brand', self.set_brand),
                              disabled=self.busy).id('printer-brand'):
                 UI.ComboBoxItem('Select brand…')
-                for brand in (('Export', 'Brother', 'Niim', 'TSC') if platform.PRINTING else ('Export',)):
+                for brand in (('File', 'Brother', 'Niim', 'TSC') if platform.PRINTING else ('File',)):
                     UI.ComboBoxItem(brand)
             with UI.ComboBox(text_model=self.input_state('printer', self.set_printer),
                              disabled=self.busy or not self.brand).id('printer-device'):
-                UI.ComboBoxItem('PNG' if self.brand == 'Export' else 'Scan for printers…')
+                UI.ComboBoxItem('PNG' if self.brand == 'File' else 'Scan for printers…')
                 for printer in self.printers:
                     UI.ComboBoxItem(printer.display)
                 if self.selected_printer():
                     UI.ComboBoxItem('Printer settings…')
-            disabled = self.busy or (self.brand != 'Export' and not self.selected_printer())
+            disabled = self.busy or (self.brand != 'File' and not self.selected_printer())
             if self.state.active_tab == 'Label':
                 UI.Label('Copies')
                 binding = self.state('copies')
@@ -369,13 +370,13 @@ class Labelate(UI.Application):
         return next((p for p in self.printers if p.display == self.printer_choice), None)
 
     def set_brand(self, value):
-        if self.busy or value not in (('Export', 'Brother', 'Niim', 'TSC') if platform.PRINTING else ('Export',)):
+        if self.busy or value not in (('File', 'Brother', 'Niim', 'TSC') if platform.PRINTING else ('File',)):
             return
         self.brand = value
         self.printers = []
-        self.printer_choice = 'PNG' if value == 'Export' else 'Scan for printers…'
+        self.printer_choice = 'PNG' if value == 'File' else 'Scan for printers…'
         self.print_message = ''
-        if value == 'Export':
+        if value == 'File':
             self.notify()
         else:
             self.scan_printers()
@@ -405,7 +406,7 @@ class Labelate(UI.Application):
         platform.run_background(self, work, done)
 
     def scan_printers(self):
-        if self.busy or self.brand == 'Export' or not self.brand or not platform.PRINTING:
+        if self.busy or self.brand == 'File' or not self.brand or not platform.PRINTING:
             return
         from . import printing
         brand = self.brand
@@ -483,7 +484,7 @@ class Labelate(UI.Application):
             self.request_print()
 
     def request_print(self):
-        if not self.busy and self.brand == 'Export':
+        if not self.busy and self.brand == 'File':
             self.export()
             return
         if self.busy or not platform.PRINTING or not self.selected_printer():
