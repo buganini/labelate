@@ -229,21 +229,22 @@ class Labelate(UI.Application):
             with UI.VBox().layout(padding=10):
                 with UI.Tabs(model=self.state('active_tab')).id('tabs').layout(weight=1):
                     with UI.Tab('Label').id('Label'):
-                        with UI.HBox().id('toolbar'):
-                            self.button('New', self.new)
-                            self.button('Open .lbl', self.open)
-                            self.button('Save .lbl', self.save)
-                            UI.Spacer()
-                        with UI.Splitter().id('workspace'):
-                            UI.Canvas(self.paint).id('canvas').layout(width=720, minWidth=240, minHeight=300).mousedown(self.pointer_down).mousemove(self.pointer_move).mouseup(self.pointer_up)
-                            with UI.Scroll().id('sidebar').layout(width=520, minWidth=460):
-                                with UI.VBox().layout(padding=10):
-                                    self.label_panel()
-                                    UI.Divider()
-                                    self.objects_panel()
-                                    UI.Divider()
-                                    self.variables_panel()
-                                    UI.Spacer()
+                        with UI.VBox():
+                            with UI.HBox().id('toolbar'):
+                                self.button('New', self.new)
+                                self.button('Open .lbl', self.open)
+                                self.button('Save .lbl', self.save)
+                                UI.Spacer()
+                            with UI.Splitter().id('workspace'):
+                                UI.Canvas(self.paint).id('canvas').layout(width=720, minWidth=240, minHeight=300).mousedown(self.pointer_down).mousemove(self.pointer_move).mouseup(self.pointer_up)
+                                with UI.Scroll().id('sidebar').layout(width=520, minWidth=460):
+                                    with UI.VBox().layout(padding=10):
+                                        self.label_panel()
+                                        UI.Divider()
+                                        self.objects_panel()
+                                        UI.Divider()
+                                        self.variables_panel()
+                                        UI.Spacer()
                     with UI.Tab('Data').id('Data'):
                         self.data_panel()
                 self.print_panel()
