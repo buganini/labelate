@@ -60,7 +60,7 @@ In the browser, PUI presents a filename dialog, then a download notification. Cl
 button to save the result to your device. Saving always creates a download; the
 app cannot overwrite the file you originally selected. New/Open first ask about
 unsaved changes. A browser navigation warning is requested while edits are pending;
-its display is controlled by the browser. Save/export commit pending text drafts.
+its display is controlled by the browser. Text edits commit through PUI when the editor loses focus.
 
 ## Python rendering API
 
@@ -219,8 +219,8 @@ The editor stores objects in a PUI State list, with a State dictionary per objec
 Content, font, style, and weight controls use native State bindings. Numeric input
 State converts the selected display unit to canonical millimetres and synchronizes
 back after dragging or model edits. State change callbacks validate edits, restore
-invalid values, reconcile variables, and refresh the preview. Text drafts remain
-separate State values until blur or an operation that commits pending edits.
+invalid values, reconcile variables, and refresh the preview. PUI owns the
+in-progress text buffer and commits content on blur; input marks the document dirty.
 Persistence, rendering, and printing receive ordinary dictionaries through a
 snapshot; UI State and callbacks are never serialized into the `.lbl` file.
 

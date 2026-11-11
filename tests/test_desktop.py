@@ -69,7 +69,7 @@ def test_desktop_font_and_relative_save(tmp_path, monkeypatch, capsys):
     app.set_print_setting('model', 'TTP-342')
     app.apply_print_settings()
     app.add('text')
-    app.set_draft(app.selected, 'Order {order}')
+    app.current()['content'] = 'Order {order}'
     app.state('active_tab').value = 'Data'
     app.add_data_row()
     app.template['data_rows'][0]('order').value = 'A001'
@@ -91,7 +91,7 @@ def test_desktop_font_and_relative_save(tmp_path, monkeypatch, capsys):
     assert sent[-1][1:] == ([{'SN':'', 'order':'A001'}], 1)
     app.state('active_tab').value = 'Label'
     app.state('copies').value = '2'
-    app.set_draft(app.selected, 'Updated {order}')
+    app.current()['content'] = 'Updated {order}'
     app.request_print()
     app.request_print()  # Busy guard prevents double submission.
     deadline = time.monotonic() + 3

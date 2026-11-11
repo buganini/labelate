@@ -53,8 +53,8 @@ def test_browser_app(tmp_path, monkeypatch):
             assert app.template['objects'] is app.state.objects
             assert isinstance(app.current(), StateDict)
             field = next(n for n in nodes(app) if isinstance(n, UI.TextEdit) and not n.readonly)
-            field.edit_model.value = 'Pending {customer}'
-            assert app.current()['content'] != 'Pending {customer}'
+            assert field.edit_model is None
+            field.model.value = 'Pending {customer}'
             download = tmp_path / 'download-without-extension'
             monkeypatch.setattr(UI, 'SaveFile', lambda **kwargs: str(download))
             assert app.save()
@@ -122,7 +122,6 @@ def test_browser_app(tmp_path, monkeypatch):
             assert 'positive' in app.status
             obj('content').value = 'State {state_value}'
             assert app.template['variables'] == {'state_value': ''}
-            assert app.drafts[oid] == 'State {state_value}'
             stale = obj('content')
             assert app.save()
             app.load_path(download)

@@ -33,7 +33,6 @@ class Labelate(UI.Application):
         self.object_inputs = {}
         self.accepted_objects = {}
         self.state.active_tab = 'Label'
-        self.state('active_tab').change(lambda value: self.commit_content())
         self.brand = 'File'
         self.printers = []
         self.printer_choice = 'PNG'
@@ -46,7 +45,6 @@ class Labelate(UI.Application):
         self.model_choices = []
         self.stock_choices = []
         self.pending_print = False
-        self.drafts = UI.State({})
         self.drag = None
         self.viewport = (0, 0, 1)
         self.preview = None
@@ -67,7 +65,6 @@ class Labelate(UI.Application):
             self.state.selected_data_row = None
             self.object_inputs.clear()
             self.accepted_objects.clear()
-            self.drafts = UI.State({})
             self.template = dict(template)
             objects = [self.make_object_state(obj) for obj in template['objects']]
             self.state.objects.clear()
@@ -83,9 +80,6 @@ class Labelate(UI.Application):
         obj = UI.State(values)
         oid = obj['id']
         self.accepted_objects[oid] = Unstate(obj)
-        self.drafts[oid] = obj['content']
-        self.drafts(oid).change(lambda value: platform.modified(True)
-                                if self.object_by_id(oid) is obj and value != obj['content'] else None)
         inputs = self.object_inputs[oid] = UI.State({
             key: self.object_number_text(obj, key) for key in self.NUMBER_FIELDS})
         inputs['font_family'] = platform.font_family(obj)
@@ -144,15 +138,12 @@ class Labelate(UI.Application):
                 for key, value in previous.items():
                     obj[key] = value
                 self.sync_object_inputs(obj)
-                self.drafts[oid] = obj['content']
                 self.status = str(exc)
                 self.notify()
             return
         self.accepted_objects[oid] = current
         if current.get('font') != previous.get('font') or current.get('font_index') != previous.get('font_index'):
             self.object_inputs[oid]['font_family'] = platform.font_family(obj)
-        if current['content'] != previous['content']:
-            self.drafts[oid] = current['content']
         self.changed()
 
     def object_number(self, label, obj, key):
@@ -212,8 +203,7 @@ class Labelate(UI.Application):
 
     def notify(self):
         self.state.revision += 1
-        platform.modified(self.modified or any(self.object_by_id(k) and self.object_by_id(k)['content'] != v
-                                      for k, v in self.drafts.items()))
+        platform.modified(self.modified)
 
     def current(self):
         return self.object_by_id(self.selected)
@@ -288,7 +278,6 @@ class Labelate(UI.Application):
                         UI.TableNode(row(name)).id(name).click(self.select_data_row, id(row))
 
     def import_data(self):
-        self.commit_content()
         path = UI.OpenFile(title='Import data', types={'Tables': ['xlsx', 'csv']})
         if not path:
             return
@@ -492,7 +481,6 @@ class Labelate(UI.Application):
         if self.busy or not platform.PRINTING or not self.selected_printer():
             return
         from . import printing
-        self.commit_content()
         try:
             copies = printing.positive_integer(self.state.copies) if self.state.active_tab == 'Label' else 1
             rows = Unstate(self.template.get('data_rows', [])) if self.state.active_tab == 'Data' else [{}]
@@ -567,7 +555,7 @@ class Labelate(UI.Application):
                 self.button('Choose image…', self.browse_image)
         elif obj['type'] != 'rect':
             UI.Label('Content')
-            UI.TextEdit(obj('content'), edit_model=self.drafts(oid)).id('content-' + oid).layout(height=90)
+            UI.TextEdit(obj('content')).input(self.content_edited).id('content-' + oid).layout(height=90)
         if obj['type'] == 'rect':
             with UI.HBox():
                 self.object_number(f'Line width ({unit})', obj, 'stroke_mm')
@@ -594,14 +582,9 @@ class Labelate(UI.Application):
         if not names:
             UI.Label('Use {name} in object content.')
 
-    def set_draft(self, oid, value):
-        if self.object_by_id(oid):
-            self.drafts[oid] = value
-
-    def commit_content(self):
-        with self.state:
-            for oid, value in self.drafts.items():
-                self.apply_content(value, oid)
+    def content_edited(self, event):
+        self.modified = True
+        platform.modified(True)
 
     def changed(self):
         self.modified = True
@@ -629,11 +612,9 @@ class Labelate(UI.Application):
         self.changed()
 
     def set_unit(self, unit):
-        self.commit_content()
         self.set_canvas('unit', unit)
 
     def set_rotation(self, value):
-        self.commit_content()
         self.drag = None
         self.template['canvas'].setdefault('rotation', 0)
         self.set_canvas('rotation', int(value))
@@ -644,33 +625,26 @@ class Labelate(UI.Application):
             return
         obj[key] = value
 
-    def apply_content(self, value, oid=None):
-        self.set_object('content', value, oid)
-
     def set_variable(self, key, value):
         self.template['variables'][key] = value
         self.changed()
 
     def add(self, kind):
-        self.commit_content()
         obj = self.make_object_state(new_object(kind))
         self.state.objects.append(obj)
         self.selected = obj['id']
         self.changed()
 
     def delete(self):
-        self.commit_content()
         obj = self.current()
         if obj is not None:
             self.state.objects.remove(obj)
-            self.drafts.pop(obj['id'], None)
             self.object_inputs.pop(obj['id'], None)
             self.accepted_objects.pop(obj['id'], None)
         self.selected = None
         self.changed()
 
     def select_object(self, oid):
-        self.commit_content()
         self.selected = oid
         self.notify()
 
@@ -716,7 +690,6 @@ class Labelate(UI.Application):
     def pointer_down(self, event):
         if event.button != 1:
             return
-        self.commit_content()
         x, y, scale = self.viewport
         c = self.template['canvas']
         mx, my = from_view((event.x-x)/scale, (event.y-y)/scale, c)
@@ -775,7 +748,6 @@ class Labelate(UI.Application):
                 UI.Warning('Enter a valid color name or hex value.', title='Invalid color')
 
     def confirm_discard(self):
-        self.commit_content()
         if not self.modified:
             return True
         if UI.Confirm('Save changes before continuing?', title='Unsaved changes'):
@@ -814,7 +786,6 @@ class Labelate(UI.Application):
             self.load_path(path)
 
     def save(self):
-        self.commit_content()
         path = UI.SaveFile(default='label.lbl', title='Save label', types=['lbl'])
         if not path:
             return False
@@ -831,7 +802,6 @@ class Labelate(UI.Application):
         from io import BytesIO
         from .printing import positive_integer
 
-        self.commit_content()
         try:
             copies = positive_integer(self.state.copies) if self.state.active_tab == 'Label' else 1
             rows = Unstate(self.template.get('data_rows', [])) if self.state.active_tab == 'Data' else [{}]
