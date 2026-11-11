@@ -257,6 +257,7 @@ class Labelate(UI.Application):
         with UI.HBox():
             self.button('Import XLSX/CSV', self.import_data)
             self.button('Add row', self.add_data_row)
+            self.button('Dedup', self.dedup_data_rows)
             self.button('Remove selected row', self.remove_data_row,
                         disabled=not any(id(row) == self.state.selected_data_row for row in rows))
             UI.Label(f'{len(rows)} row(s) · one label per row')
@@ -300,6 +301,26 @@ class Labelate(UI.Application):
 
     def select_data_row(self, event, row_id):
         self.state.selected_data_row = row_id
+
+    def dedup_data_rows(self):
+        rows = self.template['data_rows']
+        names = variable_names(self.template)
+        seen = set()
+        duplicates = []
+        for i, row in enumerate(rows):
+            key = tuple(str(row.get(n, '')) for n in names)
+            if key in seen:
+                duplicates.append(i)
+            else:
+                seen.add(key)
+        if not duplicates:
+            return
+        with self.state:
+            for i in reversed(duplicates):
+                rows.pop(i)
+            self.state.selected_data_row = None
+            self.modified = True
+        self.notify()
 
     def remove_data_row(self):
         rows = self.template['data_rows']
