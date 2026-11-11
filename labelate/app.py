@@ -31,9 +31,9 @@ class Labelate(UI.Application):
         self.accepted_objects = {}
         self.state.active_tab = 'Label'
         self.state('active_tab').change(lambda value: self.commit_content())
-        self.brand = ''
+        self.brand = 'Export'
         self.printers = []
-        self.printer_choice = 'Scan for printers…'
+        self.printer_choice = 'PNG'
         self.state.copies = '1'
         self.busy = False
         self.print_message = ''
@@ -247,7 +247,7 @@ class Labelate(UI.Application):
                 with UI.Tabs(model=self.state('active_tab')).id('tabs').layout(weight=1):
                     with UI.Tab('Label').id('Label'):
                         with UI.HBox().id('toolbar'):
-                            for title, action in [('New', self.new), ('Open .lbl', self.open), ('Save .lbl', self.save), ('Export PNG', self.export)]:
+                            for title, action in [('New', self.new), ('Open .lbl', self.open), ('Save .lbl', self.save)]:
                                 self.button(title, action)
                             UI.Spacer()
                         with UI.Splitter().id('workspace'):
@@ -343,22 +343,20 @@ class Labelate(UI.Application):
     def print_panel(self):
         with UI.HBox().id('message-bar'):
             UI.Label(self.print_message or self.status).id('status').layout(weight=1)
-            if not platform.PRINTING:
-                return
             UI.Spacer()
             with UI.ComboBox(text_model=self.input_state('brand', self.set_brand),
-                             disabled=self.busy or not platform.PRINTING).id('printer-brand'):
+                             disabled=self.busy).id('printer-brand'):
                 UI.ComboBoxItem('Select brand…')
-                for brand in ('Brother', 'Niim', 'TSC'):
+                for brand in (('Export', 'Brother', 'Niim', 'TSC') if platform.PRINTING else ('Export',)):
                     UI.ComboBoxItem(brand)
             with UI.ComboBox(text_model=self.input_state('printer', self.set_printer),
-                             disabled=self.busy or not platform.PRINTING or not self.brand).id('printer-device'):
-                UI.ComboBoxItem('Scan for printers…')
+                             disabled=self.busy or not self.brand).id('printer-device'):
+                UI.ComboBoxItem('PNG' if self.brand == 'Export' else 'Scan for printers…')
                 for printer in self.printers:
                     UI.ComboBoxItem(printer.display)
                 if self.selected_printer():
                     UI.ComboBoxItem('Printer settings…')
-            disabled = self.busy or not platform.PRINTING or not self.selected_printer()
+            disabled = self.busy or (self.brand != 'Export' and not self.selected_printer())
             if self.state.active_tab == 'Label':
                 UI.Label('Copies')
                 binding = self.state('copies')
@@ -371,12 +369,16 @@ class Labelate(UI.Application):
         return next((p for p in self.printers if p.display == self.printer_choice), None)
 
     def set_brand(self, value):
-        if self.busy or not platform.PRINTING or value not in ('Brother', 'Niim', 'TSC'):
+        if self.busy or value not in (('Export', 'Brother', 'Niim', 'TSC') if platform.PRINTING else ('Export',)):
             return
         self.brand = value
         self.printers = []
-        self.printer_choice = 'Scan for printers…'
-        self.scan_printers()
+        self.printer_choice = 'PNG' if value == 'Export' else 'Scan for printers…'
+        self.print_message = ''
+        if value == 'Export':
+            self.notify()
+        else:
+            self.scan_printers()
 
     def set_printer(self, value):
         if self.busy:
@@ -403,7 +405,7 @@ class Labelate(UI.Application):
         platform.run_background(self, work, done)
 
     def scan_printers(self):
-        if self.busy or not self.brand or not platform.PRINTING:
+        if self.busy or self.brand == 'Export' or not self.brand or not platform.PRINTING:
             return
         from . import printing
         brand = self.brand
@@ -481,6 +483,9 @@ class Labelate(UI.Application):
             self.request_print()
 
     def request_print(self):
+        if not self.busy and self.brand == 'Export':
+            self.export()
+            return
         if self.busy or not platform.PRINTING or not self.selected_printer():
             return
         from . import printing
@@ -820,15 +825,34 @@ class Labelate(UI.Application):
             return False
 
     def export(self):
+        from io import BytesIO
+        from .printing import positive_integer
+
         self.commit_content()
         try:
-            image = render(dumps(self.snapshot()), {})
-            path = UI.SaveFile(default='label.png', title='Export PNG', types=['png'])
+            copies = positive_integer(self.state.copies) if self.state.active_tab == 'Label' else 1
+            rows = Unstate(self.template.get('data_rows', [])) if self.state.active_tab == 'Data' else [{}]
+            if not rows:
+                raise ValueError('No data rows to export')
+            template = dumps(self.snapshot())
+            total = len(rows) * copies
+            files = []
+            for row in rows:
+                image = render(template, row)
+                png = BytesIO()
+                image.save(png, format='PNG', dpi=image.info['dpi'])
+                for _ in range(copies):
+                    files.append((f'label-{len(files)+1:04d}.png', png.getvalue()))
+            if total == 1:
+                path = UI.SaveFile(default='label.png', title='Export PNG', types=['png'])
+                if path:
+                    Path(path).write_bytes(files[0][1])
+            else:
+                path = platform.save_pngs(files)
             if path:
-                image.save(path, format='PNG', dpi=image.info['dpi'])
-                self.status = f'Exported {path}'
+                self.print_message = f'Exported {total} PNG label(s) to {path}'
                 self.notify()
-        except (OSError, ValueError) as exc:
+        except Exception as exc:
             UI.Warning(str(exc), title='Export error')
 
 

@@ -21,14 +21,14 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   const customer = page.locator('.pui-HBox').filter({has:page.getByText('customer',{exact:true})}).last().locator('input');
   await customer.fill('Ada');
   await customer.press('Tab');
-  console.log('checking desktop-only print controls');
-  await expect(page.getByRole('button',{name:'Print Single Label',exact:true})).toHaveCount(0);
-  await expect(page.getByText('Copies',{exact:true})).toHaveCount(0);
-  await expect(page.getByText('Select brand…',{exact:true})).toHaveCount(0);
+  console.log('checking export controls');
+  await expect(page.getByRole('button',{name:'Print Single Label',exact:true})).toBeVisible();
+  await expect(page.getByText('Copies',{exact:true})).toBeVisible();
+
   await expect(page.getByText('Scan for printers…',{exact:true})).toHaveCount(0);
   console.log('switching Data');
   await page.getByRole('tab',{name:'Data',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Print All',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Print All',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Print Single Label',exact:true})).toHaveCount(0);
   await page.getByRole('button',{name:'Add row',exact:true}).click();
   const dataPanel=page.getByRole('tabpanel',{name:'Data'});
@@ -92,7 +92,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await expect(page.getByRole('dialog')).toHaveCount(0);
   console.log('image imported');
   await expect(page.getByRole('button', {name:/image/}).filter({hasText:'●'})).toBeVisible();
-  await page.getByRole('button', {name:'Export PNG',exact:true}).click();
+  await page.getByRole('button', {name:'Print Single Label',exact:true}).click();
   await page.getByRole('dialog').getByRole('button', {name:'Download',exact:true}).click();
   const pngPromise=page.waitForEvent('download');
   await page.locator('.pui-download-card').filter({has:page.getByText('label.png',{exact:true})}).getByRole('link',{name:'Download',exact:true}).click();

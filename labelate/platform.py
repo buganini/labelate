@@ -111,3 +111,17 @@ def run_background(editor, work, done):
         else:
             post(lambda: done(result, None))
     Thread(target=run, daemon=True, name='labelate-printer').start()
+
+
+def save_pngs(files):
+    directory = UI.OpenDirectory(title='Export PNG labels')
+    if not directory:
+        return None
+    root = Path(directory)
+    paths = [root / name for name, data in files]
+    if any(path.exists() for path in paths):
+        if not UI.Confirm('Replace existing label PNG files in this folder?', title='Replace files'):
+            return None
+    for path, (_, data) in zip(paths, files):
+        path.write_bytes(data)
+    return directory

@@ -39,3 +39,9 @@ def save_document(template, path, project_dir):
 
 def run_background(editor, work, done):
     done(None, RuntimeError('Printing is available in the desktop app.'))
+
+
+def save_pngs(files):
+    from pyodide.ffi import run_sync, to_js
+    from _labelate_bridge import save_pngs as save
+    return run_sync(save(to_js(files)))

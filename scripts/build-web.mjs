@@ -14,16 +14,34 @@ function replaceOnce(source, before, after) {
 let worker = await readFile(path.join(source, 'pyodide/worker.js'), 'utf8');
 worker = replaceOnce(worker, "await python.loadPackage(['pygments', 'matplotlib']);", "await python.loadPackage(['pillow']);");
 worker = replaceOnce(worker, "python.registerJsModule('_pui_bridge',{", `python.registerJsModule('_labelate_bridge', {
+  save_pngs:files=>new Promise((resolve,reject)=>{
+    const id=crypto.randomUUID();
+    const listener=event=>{
+      if(event.data.type!=='labelate-folder-result'||event.data.id!==id)return;
+      self.removeEventListener('message',listener);
+      event.data.error ? reject(new Error(event.data.error)) : resolve(event.data.path||'');
+    };
+    self.addEventListener('message',listener);
+    postMessage({type:'labelate-folder',epoch,id,files});
+  }),
   modified:value=>postMessage({type:'labelate-dirty',epoch,value:Boolean(value)}),
 });
 python.registerJsModule('_pui_bridge',{`);
 worker = replaceOnce(worker, 'from PUI.cookbook.app import Cookbook\n_pui_task = Cookbook().start()',
   'from labelate.app import Labelate\n_labelate_app = Labelate()\n_pui_task = _labelate_app.start()');
+worker = replaceOnce(worker, "    const m=event.data;\n    if(m?.type==='dialog_reply'){",
+  "    const m=event.data;\n    if(m?.type==='labelate-folder-result')return;\n    if(m?.type==='dialog_reply'){");
 worker = worker.replaceAll('cookbook', 'Labelate').replaceAll('Cookbook', 'Labelate');
 await writeFile(path.join(source, 'pyodide/worker.js'), worker);
 let client = await readFile(path.join(source, 'pyodide/client.js'), 'utf8');
 client = replaceOnce(client, "if(m.type==='downloads'){", `if(m.type==='labelate-dirty'){
   window.dispatchEvent(new CustomEvent('labelate-dirty',{detail:m.value}));return;
+}
+if(m.type==='labelate-folder'){
+  window.labelateSavePNGs(m.files).then(
+    path=>worker.postMessage({type:'labelate-folder-result',id:m.id,path}),
+    error=>worker.postMessage({type:'labelate-folder-result',id:m.id,error:String(error)})
+  );return;
 }
 if(m.type==='downloads'){`);
 client = client.replaceAll('cookbook', 'Labelate');

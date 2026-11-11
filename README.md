@@ -53,7 +53,7 @@ in the PySide6 desktop app. The **Data** tab holds editable rows for batch print
 - **Open .lbl** imports a MessagePack template, including its embedded images.
 - **Save .lbl** saves the template and original image bytes in one binary file.
   Images do not depend on external paths and do not use Base64.
-- **Export PNG** renders at the label's full dimensions/DPI and includes DPI
+- Select **Export** as the brand and **PNG** as the printer. The print button renders at the label's full dimensions/DPI and includes DPI
   metadata. The canvas preview is capped at 1024 × 1024 pixels.
 
 In the browser, PUI presents a filename dialog, then a download notification. Click its Download
@@ -171,10 +171,16 @@ stop the batch, report completed submissions and uncertain current-label progres
 and never automatically resend. A queued/sent result does not claim physical
 printing; only a printer-confirmed result is shown as printed.
 
-The GitHub Pages/Pyodide build supports Label and Data editing and shows only the
-message bar below the tabs. Printer selection, Copies, print buttons, and printer
-settings appear only in the PySide6 desktop app. Native USB/BLE/serial/CUPS dependencies are not bundled;
-browser hardware transports would require a separate integration.
+Export is available on both backends and is selected by default. A single output
+opens a Save File dialog. Multiple outputs open a folder picker and write
+`label-0001.png`, `label-0002.png`, and so on, with confirmation before replacing
+existing files. Copies applies in Label; Data exports one PNG per row.
+All images are rendered before choosing a destination.
+
+The GitHub Pages/Pyodide build offers only Export / PNG; Brother, Niim, TSC and
+hardware settings remain desktop-only. Browser folder export uses the File System
+Access API and requires a supported browser such as Chrome or Edge. Native
+USB/BLE/serial/CUPS dependencies are not bundled.
 
 ## Local browser build
 
