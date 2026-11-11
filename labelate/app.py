@@ -562,9 +562,8 @@ class Labelate(UI.Application):
                 self.object_number(f'Corner R ({unit})', obj, 'radius_mm')
         if obj['type'] == 'text':
             platform.font_controls(self, obj, change)
-            with UI.HBox():
-                self.object_number('Font size (pt)', obj, 'font_size')
             with UI.HBox().id('typography-row'):
+                self.object_number('Size', obj, 'font_size').layout(width=60)
                 self.object_select('Style', ['normal', 'italic'], obj, 'font_style')
                 self.object_select('Weight', ['normal', 'bold'], obj, 'font_weight')
             if self.template['canvas']['mode'] == 'color':
