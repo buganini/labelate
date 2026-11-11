@@ -146,12 +146,6 @@ class Labelate(UI.Application):
             self.object_inputs[oid]['font_family'] = platform.font_family(obj)
         self.changed()
 
-    def object_select(self, label, choices, obj, key):
-        UI.Label(label)
-        with UI.ComboBox(text_model=obj(key)).id(key):
-            for choice in choices:
-                UI.ComboBoxItem(choice.title(), value=choice)
-
     def update(self, prev=None):
         self.prepare_inputs()
         super().update(prev)
@@ -562,8 +556,14 @@ class Labelate(UI.Application):
             with UI.HBox().id('typography-row'):
                 UI.Label('Size')
                 UI.TextField(self.object_inputs[oid]('font_size')).id('font_size').layout(width=60, minWidth=48)
-                self.object_select('Style', ['normal', 'italic'], obj, 'font_style')
-                self.object_select('Weight', ['normal', 'bold'], obj, 'font_weight')
+                UI.Label('Style')
+                with UI.ComboBox(text_model=obj('font_style')).id('font_style'):
+                    UI.ComboBoxItem('Normal', value='normal')
+                    UI.ComboBoxItem('Italic', value='italic')
+                UI.Label('Weight')
+                with UI.ComboBox(text_model=obj('font_weight')).id('font_weight'):
+                    UI.ComboBoxItem('Normal', value='normal')
+                    UI.ComboBoxItem('Bold', value='bold')
             if self.template['canvas']['mode'] == 'color':
                 with UI.HBox():
                     UI.Label('Color')
