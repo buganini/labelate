@@ -20,17 +20,12 @@ def read_data(path, names):
         populated = [value for value in header if value]
         if len(populated) != len(set(populated)):
             raise ValueError('Column names must be unique.')
-        missing = [name for name in names if name not in header]
-        if missing:
-            raise ValueError('Missing variable columns: ' + ', '.join(missing))
-        columns = [(name, header.index(name)) for name in names]
+        columns = [(name, header.index(name) if name in header else None) for name in names]
         result = []
         for values in source:
-            if all(value is None or value == '' for value in values):
-                continue
             row = {}
             for name, index in columns:
-                value = values[index] if index < len(values) else None
+                value = values[index] if index is not None and index < len(values) else None
                 row[name] = '' if value is None else str(value)
             result.append(row)
             if len(result) * max(1, len(names)) > 10000:

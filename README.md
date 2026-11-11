@@ -110,9 +110,9 @@ fonts remain external files. File dialogs save directly to disk.
 ## Data and desktop printing
 
 In the Data tab, **Import XLSX/CSV** replaces the table after validation.
-The first row must contain every template variable name (case-sensitive); extra
-columns are ignored. CSV uses UTF-8, including BOM. XLSX uses the first worksheet
-and cached formula values. Empty rows are skipped; failed imports preserve data.
+The first row contains column names, matched to template variables case-sensitively.
+Missing columns or cells become empty strings; extra columns are ignored. CSV uses UTF-8, including BOM. XLSX uses the first worksheet
+and cached formula values. Rows are retained even when values are missing or empty; failed imports preserve data.
 
 The Data tab has one column per template variable. Add a row to copy the current
 variable defaults, then click a cell to edit it. Each row represents one label.
