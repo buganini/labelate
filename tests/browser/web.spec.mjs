@@ -80,7 +80,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await expect(page.locator('textarea:not([readonly])')).toHaveValue('{sku}');
   await page.locator('textarea:not([readonly])').fill('ABC123');
   await page.locator('textarea:not([readonly])').press('Tab');
-  await expect(page.getByRole('button', {name:'● code128 · ABC123',exact:true})).toBeVisible();
+  await expect(page.getByRole('button', {name:'● Code128 · ABC123',exact:true})).toBeVisible();
   await page.getByRole('button', {name:'Image',exact:true}).click();
   await expect(page.locator('textarea:not([readonly])')).toHaveCount(0);
   console.log('choosing image');
@@ -91,7 +91,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   console.log('image imported');
-  await expect(page.getByRole('button', {name:/image/}).filter({hasText:'●'})).toBeVisible();
+  await expect(page.getByRole('button', {name:/Image/}).filter({hasText:'●'})).toBeVisible();
   await page.getByRole('button', {name:'Print Single Label',exact:true}).click();
   await page.getByRole('dialog').getByRole('button', {name:'Download',exact:true}).click();
   const pngPromise=page.waitForEvent('download');
@@ -115,7 +115,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
     name:'roundtrip.lbl',mimeType:'application/octet-stream',buffer:lbl
   });
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('button',{name:'image',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Image',exact:true}).last()).toBeVisible();
   await page.screenshot({path:'test-results/labelate.png',fullPage:true});
   expect(errors).toEqual([]);
 });

@@ -16,6 +16,9 @@ from .geometry import view_size, view_box, from_view
 from . import platform
 
 
+OBJECT_NAMES = {'text': 'Text', 'image': 'Image', 'qr': 'QR', 'code128': 'Code128', 'rect': 'Rect'}
+
+
 class Labelate(UI.Application):
     def __init__(self):
         super().__init__()
@@ -531,7 +534,7 @@ class Labelate(UI.Application):
     def objects_panel(self):
         UI.Label('Objects').style(fontWeight=700)
         with UI.HBox().id('object-toolbar'):
-            for label, kind in [('Text', 'text'), ('Image', 'image'), ('QR', 'qr'), ('Code128', 'code128'), ('Rect', 'rect')]:
+            for kind, label in OBJECT_NAMES.items():
                 self.button(label, lambda k=kind: self.add(k))
             UI.Spacer()
             if self.current():
@@ -540,7 +543,7 @@ class Labelate(UI.Application):
             with UI.VBox():
                 for obj in self.template['objects']:
                     prefix = '● ' if obj['id'] == self.selected else ''
-                    self.button(f"{prefix}{obj['type']}" if obj['type'] == 'image' else f"{prefix}{obj['type']} · {obj['content'][:32]}",
+                    self.button(f"{prefix}{OBJECT_NAMES[obj['type']]}" if obj['type'] == 'image' else f"{prefix}{OBJECT_NAMES[obj['type']]} · {obj['content'][:32]}",
                                 lambda key=obj['id']: self.select_object(key), obj['id'])
                 UI.Spacer()
         obj = self.current()
@@ -680,7 +683,7 @@ class Labelate(UI.Application):
             try:
                 tile = object_image(obj, canvas, self.template['variables'])
             except Exception as exc:
-                errors.append(f"{obj['type']}: {exc}")
+                errors.append(f"{OBJECT_NAMES[obj['type']]}: {exc}")
                 tile = Image.new('RGBA', (pixels(obj['width_mm'], canvas['dpi']), pixels(obj['height_mm'], canvas['dpi'])), '#ffe4e6')
                 ImageDraw.Draw(tile).rectangle((0, 0, tile.width-1, tile.height-1), outline='red', width=2)
             result.alpha_composite(tile, (round(obj['x_mm'] * canvas['dpi'] / 25.4), round(obj['y_mm'] * canvas['dpi'] / 25.4)))
