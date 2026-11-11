@@ -146,10 +146,6 @@ class Labelate(UI.Application):
             self.object_inputs[oid]['font_family'] = platform.font_family(obj)
         self.changed()
 
-    def object_number(self, label, obj, key):
-        UI.Label(label)
-        return UI.TextField(self.object_inputs[obj['id']](key)).id(key).layout(minWidth=48)
-
     def object_select(self, label, choices, obj, key):
         UI.Label(label)
         with UI.ComboBox(text_model=obj(key)).id(key):
@@ -545,11 +541,16 @@ class Labelate(UI.Application):
         def change(key, value):
             self.set_object(key, value, oid)
         with UI.HBox():
-            self.object_number('X', obj, 'x_mm').layout(width=60)
-            self.object_number('Y', obj, 'y_mm').layout(width=60)
-            self.object_number('W', obj, 'width_mm').layout(width=60)
-            self.object_number('H', obj, 'height_mm').layout(width=60)
-            self.object_number('R', obj, 'rotation_deg').layout(width=60)
+            UI.Label('X')
+            UI.TextField(self.object_inputs[oid]('x_mm')).id('x_mm').layout(width=60, minWidth=48)
+            UI.Label('Y')
+            UI.TextField(self.object_inputs[oid]('y_mm')).id('y_mm').layout(width=60, minWidth=48)
+            UI.Label('W')
+            UI.TextField(self.object_inputs[oid]('width_mm')).id('width_mm').layout(width=60, minWidth=48)
+            UI.Label('H')
+            UI.TextField(self.object_inputs[oid]('height_mm')).id('height_mm').layout(width=60, minWidth=48)
+            UI.Label('R')
+            UI.TextField(self.object_inputs[oid]('rotation_deg')).id('rotation_deg').layout(width=60, minWidth=48)
         if obj['type'] == 'image':
             with UI.HBox():
                 UI.Label('Image')
@@ -559,12 +560,15 @@ class Labelate(UI.Application):
             UI.TextEdit(obj('content')).input(self.content_edited).id('content-' + oid).layout(height=90)
         if obj['type'] == 'rect':
             with UI.HBox():
-                self.object_number(f'Line width ({unit})', obj, 'stroke_mm')
-                self.object_number(f'Corner R ({unit})', obj, 'radius_mm')
+                UI.Label(f'Line width ({unit})')
+                UI.TextField(self.object_inputs[oid]('stroke_mm')).id('stroke_mm').layout(minWidth=48)
+                UI.Label(f'Corner R ({unit})')
+                UI.TextField(self.object_inputs[oid]('radius_mm')).id('radius_mm').layout(minWidth=48)
         if obj['type'] == 'text':
             platform.font_controls(self, obj, change)
             with UI.HBox().id('typography-row'):
-                self.object_number('Size', obj, 'font_size').layout(width=60)
+                UI.Label('Size')
+                UI.TextField(self.object_inputs[oid]('font_size')).id('font_size').layout(width=60, minWidth=48)
                 self.object_select('Style', ['normal', 'italic'], obj, 'font_style')
                 self.object_select('Weight', ['normal', 'bold'], obj, 'font_weight')
             if self.template['canvas']['mode'] == 'color':
