@@ -93,7 +93,7 @@ def main():
     (output / '.nojekyll').touch()
     (output / 'build-info.json').write_text(json.dumps({
         'qpuiq': '1.9', 'pui_commit': PUI_COMMIT, 'pyodide': '314.0.7',
-        'qrcode': '8.2', 'python-barcode': '0.16.1', 'license': 'GPL-3.0-only',
+        'qrcode': '8.2', 'python-barcode': '0.16.1', 'license': 'MIT',
         'font': 'Noto Sans CJK TC Regular 2.004', 'msgpack': '1.1.2', 'openpyxl': '3.1.5', 'et-xmlfile': '2.0.0'
     }, indent=2) + '\n')
     print(f'Prepared {output}')
