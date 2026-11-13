@@ -21,7 +21,7 @@ OBJECT_TYPES = ['Text', 'Image', 'QR', 'Code128', 'Rect']
 
 class Labelate(UI.Application):
     def __init__(self):
-        super().__init__()
+        super().__init__(icon=str(Path(__file__).resolve().parent.parent / "resources" / "icon.svg"))
         self.template, self.path = new_template(), None
         self.selected, self.modified = None, False
         self.state = UI.State()
