@@ -32,7 +32,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await expect(page.getByRole('button',{name:'Print Single Label',exact:true})).toHaveCount(0);
   await page.getByRole('button',{name:'Add row',exact:true}).click();
   const dataPanel=page.getByRole('tabpanel',{name:'Data'});
-  await dataPanel.getByRole('cell',{name:'Ada',exact:true}).click();
+  await dataPanel.getByRole('cell',{name:'Ada',exact:true}).dblclick();  // PUI 1.10 edits cells on double-click
   await dataPanel.getByRole('textbox',{name:'Edit cell'}).fill('Bob');
   // Switching tabs commits the still-focused data cell.
   await page.getByRole('tab',{name:'Label',exact:true}).click();
