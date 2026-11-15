@@ -88,6 +88,7 @@ def main():
                 archive.write(path, path.relative_to(source))
         for path in sorted((ROOT / 'labelate').glob('*.py')):
             archive.writestr(str(path.relative_to(ROOT)), browser_source(path))
+        archive.write(ROOT / 'labelate/icon.svg', 'labelate/icon.svg')
         archive.write(ROOT / 'examples/product.lbl', 'examples/product.lbl')
         archive.write(ROOT / 'LICENSE', 'LICENSE')
         archive.write(source / 'LICENSE.txt', 'licenses/PUI-MIT.txt')

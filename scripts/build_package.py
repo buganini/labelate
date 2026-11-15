@@ -46,6 +46,7 @@ PyInstaller.__main__.run([
     "--windowed",
     "--add-data", f"{os.path.join(PKG_BASE, 'LICENSE')}{os.pathsep}.",
     "--add-data", f"{notices}{os.pathsep}.",
+    "--add-data", f"{os.path.join(PKG_BASE, 'labelate', 'icon.svg')}{os.pathsep}labelate",
     *pyinstaller_args,
 ])
 
