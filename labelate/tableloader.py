@@ -43,23 +43,6 @@ class XLSXLoader():
     def close(self):
         self.wb.close()
 
-class XLSLoader():
-    def __init__(self, filename, sheet):
-        import xlrd
-        if sheet is None:
-            sheet = 0
-        self.filename = filename
-        self.book = xlrd.open_workbook(filename)
-        self.sheet = self.book.sheet_by_index(sheet)
-
-    def rows(self):
-        for row_idx in range(self.sheet.nrows):
-            yield [type_mapper(cell.value) for cell in self.sheet.row(row_idx)]
-
-    def close(self):
-        self.book.release_resources()
-        self.book = None
-
 def toMaps(loader, break_on_empty_row=False):
     max_column = -1
     max_row = -1
@@ -89,15 +72,11 @@ def TableLoader(filename, force=None, delimiter=None, encoding=None, sheet=None)
             return CSVLoader(filename, delimiter=delimiter, encoding=encoding)
         elif force == "xlsx":
             return XLSXLoader(filename, sheet=sheet)
-        # elif force == "xls":
-        #     return XLSLoader(filename, sheet=sheet)
     fn, ext = os.path.splitext(filename)
     if ext.lower() in (".csv", ".txt", ".log"):
         return CSVLoader(filename, delimiter=delimiter, encoding=encoding)
     elif ext.lower() == ".xlsx":
         return XLSXLoader(filename, sheet=sheet)
-    # elif ext.lower() == ".xls":
-    #     return XLSLoader(filename, sheet=sheet)
     return None
 
 
