@@ -10,7 +10,7 @@ from urllib.request import urlopen
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PUI_COMMIT = 'e7c1886ddbfecd37b7af32bcb8e057e4f64d5303'  # QPUIQ 1.9 release
+PUI_COMMIT = 'eac5c6397d502c7cce077bd64813c4c615755305'  # QPUIQ 1.10 release
 FONT_BASE = 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/'
 PYODIDE_VERSION = '314.0.7'
 WHEELS = ('qrcode==8.2', 'python-barcode==0.16.1', 'msgpack==1.1.2', 'openpyxl==3.1.5', 'et-xmlfile==2.0.0')
@@ -63,7 +63,7 @@ def main():
     source = args.pui_source.resolve()
     commit = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
     if commit != PUI_COMMIT:
-        parser.error(f'PUI source must be pinned to {PUI_COMMIT} (QPUIQ 1.9)')
+        parser.error(f'PUI source must be pinned to {PUI_COMMIT} (QPUIQ 1.10)')
     subprocess.run(['git', '-C', str(source), 'diff', '--exit-code', 'HEAD', '--', 'PUI', 'browser-client'], check=True)
     output = ROOT / 'dist/pyodide'
     output.mkdir(parents=True, exist_ok=True)
@@ -112,7 +112,7 @@ def main():
     (output / 'THIRD_PARTY_LICENSES.txt').write_text(notices, encoding='utf-8')
     (output / '.nojekyll').touch()
     (output / 'build-info.json').write_text(json.dumps({
-        'qpuiq': '1.9', 'pui_commit': PUI_COMMIT, 'pyodide': PYODIDE_VERSION,
+        'qpuiq': '1.10', 'pui_commit': PUI_COMMIT, 'pyodide': PYODIDE_VERSION,
         'qrcode': '8.2', 'python-barcode': '0.16.1', 'license': 'MIT',
         'font': 'Noto Sans CJK TC Regular 2.004', 'msgpack': '1.1.2', 'openpyxl': '3.1.5', 'et-xmlfile': '2.0.0'
     }, indent=2) + '\n')

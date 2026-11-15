@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: buganini/PUI
-          ref: e7c1886ddbfecd37b7af32bcb8e057e4f64d5303
+          ref: eac5c6397d502c7cce077bd64813c4c615755305
           path: .build/PUI
       - uses: actions/setup-python@v6
         with:

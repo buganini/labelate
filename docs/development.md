@@ -59,7 +59,7 @@ python -m pip install -e '.[dev]'
 npm ci
 mkdir -p .build
 git clone https://github.com/buganini/PUI.git .build/PUI
-git -C .build/PUI checkout e7c1886ddbfecd37b7af32bcb8e057e4f64d5303
+git -C .build/PUI checkout eac5c6397d502c7cce077bd64813c4c615755305
 python scripts/build_pyodide.py
 npm run build
 python3 -m http.server 8868 --directory dist/pyodide
@@ -141,7 +141,7 @@ Desktop font selection uses PUI FontComboBox. The selected system family is reso
 to a Pillow-readable font file; collection fonts also store a zero-based
 `font_index`. Manual font-file selection remains available. The web version
 continues to use bundled Noto Sans CJK TC. PUI is pinned to commit
-`e7c1886ddbfecd37b7af32bcb8e057e4f64d5303` for the QPUIQ 1.10 release.
+`eac5c6397d502c7cce077bd64813c4c615755305` for the QPUIQ 1.10 release.
 
 ## Default font details
 
