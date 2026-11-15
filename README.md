@@ -1,7 +1,9 @@
 # Labelate
 
-A label template editor and renderer, with a **PySide6 desktop app** and a
-**browser app** powered by Pyodide.
+A label template editor and renderer.
+
+- **Web app** — edit labels and export PNG, right in the browser.
+- **Desktop app** — connect to Brother, Niim, or TSC label printers and print directly.
 
 **Open the web app: [https://buganini.github.io/labelate/](https://buganini.github.io/labelate/)**
 
