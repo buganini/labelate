@@ -12,6 +12,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PUI_COMMIT = 'e7c1886ddbfecd37b7af32bcb8e057e4f64d5303'  # QPUIQ 1.9 release
 FONT_BASE = 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/'
+PYODIDE_VERSION = '314.0.7'
+WHEELS = ('qrcode==8.2', 'python-barcode==0.16.1', 'msgpack==1.1.2', 'openpyxl==3.1.5', 'et-xmlfile==2.0.0')
+CDN_NOTE = (
+    f'Loaded at runtime from cdn.jsdelivr.net (not redistributed in this build): Pyodide {PYODIDE_VERSION}',
+    '(MPL-2.0, https://github.com/pyodide/pyodide) and its Pillow package (MIT-CMU,',
+    'https://github.com/python-pillow/Pillow).',
+)
 
 
 def browser_source(path):
@@ -47,6 +54,9 @@ def font_assets():
 
 
 def main():
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from third_party_licenses import from_wheel, render
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pui-source', type=Path, default=ROOT / '.build/PUI')
     args = parser.parse_args()
@@ -61,7 +71,17 @@ def main():
     wheels = ROOT / '.build/wheels'
     wheels.mkdir(parents=True, exist_ok=True)
     subprocess.run([sys.executable, '-m', 'pip', 'download', '--no-deps', '--only-binary=:all:',
-                    '--dest', str(wheels), 'qrcode==8.2', 'python-barcode==0.16.1', 'msgpack==1.1.2', 'openpyxl==3.1.5', 'et-xmlfile==2.0.0'], check=True)
+                    '--dest', str(wheels), *WHEELS], check=True)
+    wheel_files = [next(wheels.glob(f"{name.replace('-', '_')}-{version}-*.whl"))
+                   for name, version in (spec.split('==') for spec in WHEELS)]
+    notices = render([
+        {'name': 'PUI (QPUIQ)', 'version': PUI_COMMIT, 'license': 'MIT', 'homepage': 'https://github.com/buganini/PUI',
+         'files': [('LICENSE.txt', (source / 'LICENSE.txt').read_text(encoding='utf-8'))]},
+        {'name': 'Noto Sans CJK TC Regular', 'version': '2.004', 'license': 'OFL-1.1',
+         'homepage': 'https://github.com/notofonts/noto-cjk',
+         'files': [('LICENSE', (ROOT / '.build/fonts/OFL.txt').read_text(encoding='utf-8'))]},
+        *map(from_wheel, wheel_files),
+    ], notes=CDN_NOTE)
     with zipfile.ZipFile(output / 'app.zip', 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for directory in ('PUI', 'PUI/_browser', 'PUI/pyodide'):
             for path in sorted((source / directory).glob('*.py')):
@@ -71,11 +91,10 @@ def main():
         archive.write(ROOT / 'examples/product.lbl', 'examples/product.lbl')
         archive.write(ROOT / 'LICENSE', 'LICENSE')
         archive.write(source / 'LICENSE.txt', 'licenses/PUI-MIT.txt')
+        archive.writestr('THIRD_PARTY_LICENSES.txt', notices)
         for font in fonts:
             archive.write(font, 'labelate/fonts/' + font.name)
-        for pattern in ('qrcode-8.2-*.whl', 'python_barcode-0.16.1-*.whl', 'msgpack-1.1.2-*.whl',
-                        'openpyxl-3.1.5-*.whl', 'et_xmlfile-2.0.0-*.whl'):
-            wheel = next(wheels.glob(pattern))
+        for wheel in wheel_files:
             with zipfile.ZipFile(wheel) as package:
                 for name in package.namelist():
                     if not name.endswith(('/', '.so', '.pyd', '.dll')):
@@ -90,9 +109,10 @@ def main():
     shutil.copyfile(ROOT / 'LICENSE', output / 'LICENSE')
     shutil.copyfile(source / 'LICENSE.txt', output / 'PUI-LICENSE.txt')
     shutil.copyfile(ROOT / '.build/fonts/OFL.txt', output / 'FONT-LICENSE.txt')
+    (output / 'THIRD_PARTY_LICENSES.txt').write_text(notices, encoding='utf-8')
     (output / '.nojekyll').touch()
     (output / 'build-info.json').write_text(json.dumps({
-        'qpuiq': '1.9', 'pui_commit': PUI_COMMIT, 'pyodide': '314.0.7',
+        'qpuiq': '1.9', 'pui_commit': PUI_COMMIT, 'pyodide': PYODIDE_VERSION,
         'qrcode': '8.2', 'python-barcode': '0.16.1', 'license': 'MIT',
         'font': 'Noto Sans CJK TC Regular 2.004', 'msgpack': '1.1.2', 'openpyxl': '3.1.5', 'et-xmlfile': '2.0.0'
     }, indent=2) + '\n')

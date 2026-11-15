@@ -12,6 +12,11 @@ sys.path.insert(0, PKG_BASE)
 os.chdir(PKG_BASE)
 
 import PyInstaller.__main__
+from scripts.third_party_licenses import installed_closure, render
+
+notices = Path(PKG_BASE, ".build/THIRD_PARTY_LICENSES.txt")
+notices.parent.mkdir(parents=True, exist_ok=True)
+notices.write_text(render(installed_closure("labelate")), encoding="utf-8")
 
 # macOS
 ## brew install create-dmg
@@ -39,6 +44,8 @@ PyInstaller.__main__.run([
     "--onedir",
     "--noconfirm",
     "--windowed",
+    "--add-data", f"{os.path.join(PKG_BASE, 'LICENSE')}{os.pathsep}.",
+    "--add-data", f"{notices}{os.pathsep}.",
     *pyinstaller_args,
 ])
 
