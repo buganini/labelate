@@ -31,6 +31,9 @@ and ZIP templates are not supported. Geometry is stored in millimetres regardles
 of `canvas.unit`; font size is in points. Object types are `text`, `image`, `qr`,
 `code128`, and `rect`. Images store original bytes in `data` and the filename basename in `image_name`. Font paths remain in `font`. Text options are
 `font_style` and `font_weight`; rectangle options are `stroke_mm` and `radius_mm`.
+Every object has an integer `z` (±1,000,000); objects are drawn and hit-tested in
+ascending `z`, with ties kept in list order. Templates without `z` load as `z = 0`,
+so their existing stacking is unchanged.
 Use `labelate.model.loads(lbl_bytes)` and `dumps(template)` to decode and encode.
 See [examples/product.lbl](../examples/product.lbl) for a complete template.
 

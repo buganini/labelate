@@ -6,6 +6,7 @@ import uuid
 
 VARIABLE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 KINDS = ("text", "image", "qr", "code128", "rect")
+Z_LIMIT = 1_000_000
 UNIT_MM = {"mm": 1, "cm": 10, "in": 25.4}
 LABEL_PRESETS = {
     **{f"{w} × {h} mm": (w, h) for w, h in (
@@ -29,12 +30,17 @@ def new_object(kind):
             "width_mm": 30, "height_mm": 15 if kind != "qr" else 30,
             "content": {"text": "SN: {SN}", "image": "", "qr": "https://example.com/{id}",
                         "code128": "{sku}", "rect": ""}[kind],
-            "stroke_mm": 0.3, "radius_mm": 0, "rotation_deg": 0,
+            "stroke_mm": 0.3, "radius_mm": 0, "rotation_deg": 0, "z": 0,
             "font": "", "font_index": 0, "font_size": 12, "font_style": "normal",
             "font_weight": "normal", "color": "#000000"}
     if kind == "image":
         obj.update(data=b"", image_name="")
     return obj
+
+
+def draw_order(objects):
+    """Objects from back to front: ascending z, ties keep list order (older files have no z)."""
+    return sorted(objects, key=lambda obj: obj.get("z", 0))
 
 
 def variable_names(template):
@@ -95,6 +101,9 @@ def validate(template):
             angle = obj.get('rotation_deg', 0)
             if isinstance(angle, bool) or not isinstance(angle, (int, float)) or not math.isfinite(angle) or not 0 <= angle <= 360:
                 raise ValueError("Object rotation must be between 0 and 360 degrees")
+            z = obj.get('z', 0)
+            if type(z) is not int or not -Z_LIMIT <= z <= Z_LIMIT:
+                raise ValueError(f"Object z must be an integer between {-Z_LIMIT} and {Z_LIMIT}")
             if obj['type'] == 'image':
                 if not isinstance(obj.get('data'), bytes):
                     raise ValueError('Image data must be bytes')

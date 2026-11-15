@@ -6,7 +6,7 @@ import barcode
 import qrcode
 from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps
 
-from .model import loads, substitute
+from .model import loads, substitute, draw_order
 from .geometry import view_size
 
 DEFAULT_FONT = Path(__file__).with_name('fonts') / 'NotoSansCJKtc-Regular.otf'
@@ -126,7 +126,7 @@ def render(lbl_bytes, variables):
     values = {**template.get("variables", {}), **variables}
     result = Image.new("RGBA", tuple(pixels(length, canvas["dpi"])
                                      for length in view_size(canvas)), "white")
-    for obj in template["objects"]:
+    for obj in draw_order(template["objects"]):
         try:
             tile = object_image(obj, canvas, values)
             composite_object(result, tile, obj, canvas["dpi"])

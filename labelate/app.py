@@ -8,7 +8,7 @@ from PUI.state import Unstate
 from PIL import Image, ImageDraw, ImageColor
 
 from .model import (new_template, new_object, variable_names, reconcile_variables,
-                    dumps, display_length, millimetres, UNIT_MM)
+                    dumps, display_length, millimetres, UNIT_MM, Z_LIMIT, draw_order)
 from .renderer import render, object_image, pixels, composite_object
 from .template_io import open_document
 from .data_import import read_data
@@ -76,7 +76,7 @@ class Labelate(UI.Application):
         # Supply defaults for fields omitted by older templates before binding them.
         values = {**new_object(data['type']), **data}
         for key in self.NUMBER_FIELDS:
-            values[key] = float(values[key])
+            values[key] = int(values[key]) if key == 'z' else float(values[key])
         obj = UI.State(values)
         oid = obj['id']
         self.accepted_objects[oid] = Unstate(obj)
@@ -89,7 +89,7 @@ class Labelate(UI.Application):
             obj(key).change(lambda value, item=obj: self.object_state_changed(item))
         return obj
 
-    NUMBER_FIELDS = ('x_mm', 'y_mm', 'width_mm', 'height_mm', 'stroke_mm', 'radius_mm', 'font_size', 'rotation_deg')
+    NUMBER_FIELDS = ('x_mm', 'y_mm', 'width_mm', 'height_mm', 'stroke_mm', 'radius_mm', 'font_size', 'rotation_deg', 'z')
 
     def object_number_text(self, obj, key):
         value = obj[key]
@@ -111,8 +111,12 @@ class Labelate(UI.Application):
             return
         try:
             value = float(text)
-            minimum = 0 if key in ('x_mm', 'y_mm', 'radius_mm', 'rotation_deg') else 1 if key == 'font_size' else .001
-            maximum = 360 if key == 'rotation_deg' else 1000 if key == 'font_size' else 10000
+            if key == 'z':
+                if not value.is_integer() or not -Z_LIMIT <= value <= Z_LIMIT:
+                    raise ValueError(f'z must be an integer between {-Z_LIMIT} and {Z_LIMIT}')
+                value = int(value)
+            minimum = -Z_LIMIT if key == 'z' else 0 if key in ('x_mm', 'y_mm', 'radius_mm', 'rotation_deg') else 1 if key == 'font_size' else .001
+            maximum = Z_LIMIT if key == 'z' else 360 if key == 'rotation_deg' else 1000 if key == 'font_size' else 10000
             if not math.isfinite(value) or not minimum <= value <= maximum:
                 raise ValueError(f'{key} must be between {minimum} and {maximum}')
             if key.endswith('_mm'):
@@ -539,7 +543,9 @@ class Labelate(UI.Application):
                 self.button(name, lambda k=name.lower(): self.add(k))
             UI.Spacer()
             if self.current():
-                self.button('Delete selected', self.delete)
+                self.button('To Front', self.to_front)
+                self.button('To Back', self.to_back)
+                self.button('Delete', self.delete)
         obj = self.current()
         if obj:
             with UI.VBox().id('properties-' + obj['id']):
@@ -559,6 +565,8 @@ class Labelate(UI.Application):
             UI.TextField(self.object_inputs[oid]('height_mm')).id('height_mm').layout(width=75, minWidth=48)
             UI.Label('R')
             UI.TextField(self.object_inputs[oid]('rotation_deg')).id('rotation_deg').layout(width=60, minWidth=48)
+            UI.Label('Z')
+            UI.TextField(self.object_inputs[oid]('z')).id('z').layout(width=50, minWidth=40)
         if obj['type'] == 'image':
             with UI.HBox():
                 UI.Label('Image')
@@ -649,7 +657,9 @@ class Labelate(UI.Application):
         self.changed()
 
     def add(self, kind):
-        obj = self.make_object_state(new_object(kind))
+        # New objects go on top of everything already on the label.
+        data = {**new_object(kind), 'z': max((o.get('z', 0) + 1 for o in self.state.objects), default=0)}
+        obj = self.make_object_state(data)
         self.state.objects.append(obj)
         self.selected = obj['id']
         self.changed()
@@ -663,6 +673,25 @@ class Labelate(UI.Application):
         self.selected = None
         self.changed()
 
+    def restack(self, front):
+        obj = self.current()
+        if obj is None:
+            return
+        others = [o.get('z', 0) for o in self.state.objects if o is not obj]
+        if not others:
+            return
+        z = max(others) + 1 if front else min(others) - 1
+        # Already strictly in front/behind: keep z stable instead of drifting.
+        if (front and obj['z'] > max(others)) or (not front and obj['z'] < min(others)):
+            return
+        obj['z'] = z
+
+    def to_front(self):
+        self.restack(True)
+
+    def to_back(self):
+        self.restack(False)
+
     def select_object(self, oid):
         self.selected = oid
         self.notify()
@@ -672,7 +701,7 @@ class Labelate(UI.Application):
         size = tuple(pixels(length, canvas['dpi']) for length in view_size(canvas))
         result = Image.new('RGBA', size, 'white')
         errors = []
-        for obj in self.template['objects']:
+        for obj in draw_order(self.template['objects']):
             try:
                 tile = object_image(obj, canvas, self.template['variables'])
             except Exception as exc:
@@ -738,7 +767,7 @@ class Labelate(UI.Application):
         vw, vh = view_size(self.template['canvas'])
         hit = None
         if 0 <= mx <= vw and 0 <= my <= vh:
-            hit = next((o for o in reversed(self.template['objects']) if contains_point(o, mx, my)), None)
+            hit = next((o for o in reversed(draw_order(self.template['objects'])) if contains_point(o, mx, my)), None)
         self.selected = hit['id'] if hit else None
         if hit:
             self.drag = dict(mode='move', offset=(mx-hit['x_mm'], my-hit['y_mm']))
