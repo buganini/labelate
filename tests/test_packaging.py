@@ -32,3 +32,17 @@ def test_running_the_directory_does_not_shadow_stdlib_platform():
                             env={'QT_QPA_PLATFORM': 'offscreen', 'PATH': ''})
     assert result.returncode == 0, result.stderr
     assert Path(result.stdout.strip().splitlines()[-1]) != ROOT / 'labelate' / 'platform.py'
+
+
+def test_window_title_shows_the_package_version():
+    import labelate
+    pyproject = tomllib.loads((ROOT / 'pyproject.toml').read_text())
+    assert pyproject['project']['dynamic'] == ['version']
+    assert pyproject['tool']['setuptools']['dynamic']['version'] == {'attr': 'labelate.version.__version__'}
+    assert labelate.__version__.isdigit() and len(labelate.__version__) == 9
+    from labelate import printing
+    import PUI
+    title = Labelate().window_title()
+    assert title.startswith(f'Labelate v{labelate.__version__} — Label Template Editor (PUI {PUI.__version__} PySide6')
+    for package, version in printing.driver_versions():
+        assert f', {package} {version}' in title

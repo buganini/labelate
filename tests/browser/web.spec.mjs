@@ -10,6 +10,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   console.log('loading');
   await expect(page.getByRole('button', {name:'Text',exact:true})).toBeVisible({timeout:120000});
   await expect(page.locator('#pui-status')).toBeHidden();
+  await expect(page).toHaveTitle(/^Labelate v\d{9} — Label Template Editor \(PUI 1\.10 pyodide\)$/);
   await page.getByRole('button', {name:'Text',exact:true}).click();
   const content = page.locator('textarea:not([readonly])');
   await expect(content).toHaveValue('SN: {SN}');

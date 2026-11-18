@@ -14,6 +14,7 @@ from .template_io import open_document
 from .data_import import read_data
 from .geometry import view_size, object_corners, object_point, contains_point, resize_corner, rotate_vector
 from . import platform
+from .version import __version__
 
 
 OBJECT_TYPES = ['Text', 'Image', 'QR', 'Code128', 'Rect']
@@ -228,9 +229,17 @@ class Labelate(UI.Application):
                 self.notify()
         return UI.TextField(self.input_state(self.binding_scope + ':' + key, commit)).id(key).layout(minWidth=48)
 
+    def window_title(self):
+        import PUI
+        parts = [f'PUI {PUI.__version__} {UI.__name__.rsplit(".", 1)[-1]}']
+        if platform.PRINTING:
+            from .printing import driver_versions
+            parts += [f'{package} {version}' for package, version in driver_versions()]
+        return f'Labelate v{__version__} — Label Template Editor ({", ".join(parts)})'
+
     def content(self):
         _ = self.state.revision
-        with UI.Window(title='Labelate — Label Template Editor', size=(1280, 800), maximize=True).id('window'):
+        with UI.Window(title=self.window_title(), size=(1280, 800), maximize=True).id('window'):
             with UI.VBox().layout(padding=10):
                 with UI.Tabs(model=self.state('active_tab')).id('tabs').layout(weight=1):
                     with UI.Tab('Label').id('Label'):

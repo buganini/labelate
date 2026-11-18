@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "labelate"
-version = "202611184"
+dynamic = ["version"]
 license = "MIT"
 license-files = ["LICENSE"]
 description = "A QPUIQ label template editor and Pillow renderer"
@@ -24,6 +24,9 @@ labelate = "labelate.app:main"
 
 [tool.setuptools.packages.find]
 include = ["labelate*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "labelate.version.__version__"}
 
 [tool.setuptools.package-data]
 labelate = ["icon.svg", "fonts/*"]

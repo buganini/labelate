@@ -9,6 +9,18 @@ from .renderer import render
 PACKAGES = {'Brother': 'brother_ql', 'Niim': 'pyniim', 'TSC': 'pytsc'}
 
 
+def driver_versions():
+    """Installed driver versions as (package, version), omitting missing drivers."""
+    from importlib.metadata import PackageNotFoundError, version
+    found = []
+    for package in PACKAGES.values():
+        try:
+            found.append((package, version(package)))
+        except PackageNotFoundError:
+            pass
+    return found
+
+
 def module(brand, suffix):
     package = PACKAGES[brand]
     try:
