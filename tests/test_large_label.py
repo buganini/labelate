@@ -34,3 +34,46 @@ def test_paint_skips_an_unpaintable_preview():
         def drawImage(self, *args): calls.append('image')
     app.paint(Canvas())
     assert calls == ['rect']
+
+
+def nodes(root):
+    yield root
+    for child in root.children:
+        yield from nodes(child)
+
+
+def test_rejected_size_shows_a_red_error_after_the_file_buttons():
+    from PySide6 import QtCore, QtWidgets
+    from PUI.dom import recur_delete
+    app = Labelate()
+    if QtWidgets.QApplication.instance():
+        app.ui = QtWidgets.QApplication.instance()
+    try:
+        check_error_label(app)
+    finally:
+        qtapp = QtWidgets.QApplication.instance()
+        recur_delete(app, app, True)
+        if qtapp:
+            qtapp.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+
+
+def check_error_label(app):
+    app.sync()
+    flush = lambda: [app.ui.processEvents() for _ in range(3)]
+    flush()
+    assert not any(n._id == 'error' for n in nodes(app))
+    # 2000 x 2000 mm at 300 DPI is far beyond the 40 million pixel canvas limit.
+    app.set_canvas('width_mm', 2000)
+    app.set_canvas('height_mm', 2000)
+    flush()
+    assert app.template['canvas']['height_mm'] != 2000
+    assert 'million pixels' in app.error
+    toolbar = next(n for n in nodes(app) if n._id == 'toolbar')
+    labels = [n for n in toolbar.children if n._id == 'error']
+    assert labels and labels[0].text == app.error and labels[0].style_color == 0xdc2626
+    ids = [n._id for n in toolbar.children]
+    assert ids.index('error') > ids.index('Save .lbl')
+    app.set_canvas('height_mm', 50)
+    flush()
+    assert app.error == ''
+    assert not any(n._id == 'error' for n in nodes(app))

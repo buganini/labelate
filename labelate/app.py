@@ -50,6 +50,7 @@ class Labelate(UI.Application):
         self.viewport = (0, 0, 1)
         self.preview = None
         self.status = ''
+        self.error = ''  # shown in red after the New/Open/Save toolbar
         self.project_dir = None
         self.inputs = UI.State({})
         self.input_callbacks = {}
@@ -124,7 +125,7 @@ class Labelate(UI.Application):
                 value = millimetres(value, self.template['canvas']['unit'])
             obj[key] = value
         except ValueError as exc:
-            self.status = str(exc)
+            self.error = str(exc)
             self.sync_object_inputs(obj)
             self.notify()
 
@@ -143,7 +144,7 @@ class Labelate(UI.Application):
                 for key, value in previous.items():
                     obj[key] = value
                 self.sync_object_inputs(obj)
-                self.status = str(exc)
+                self.error = str(exc)
                 self.notify()
             return
         self.accepted_objects[oid] = current
@@ -225,7 +226,7 @@ class Labelate(UI.Application):
                     raise ValueError(f'{label} must be between {minimum} and {maximum}')
                 setter(number)
             except ValueError as exc:
-                self.status = str(exc)
+                self.error = str(exc)
                 self.notify()
         return UI.TextField(self.input_state(self.binding_scope + ':' + key, commit)).id(key).layout(minWidth=48)
 
@@ -250,6 +251,8 @@ class Labelate(UI.Application):
                                 self.button('Save .lbl', self.save)
                                 if platform.DESKTOP_DOWNLOAD:
                                     self.button('Desktop version', lambda: UI.OpenURL(platform.DESKTOP_DOWNLOAD), 'desktop-version')
+                                if self.error:
+                                    UI.Label(self.error).id('error').style(color=0xdc2626)
                                 UI.Spacer()
                             with UI.Splitter().id('workspace'):
                                 UI.Canvas(self.paint).id('canvas').layout(width=720, minWidth=240, minHeight=300).mousedown(self.pointer_down).mousemove(self.pointer_move).mouseup(self.pointer_up)
@@ -653,7 +656,7 @@ class Labelate(UI.Application):
             dumps(self.snapshot())
         except ValueError as exc:
             self.template['canvas'][key] = old
-            self.status = str(exc)
+            self.error = str(exc)
             self.notify()
             return
         self.changed()
@@ -747,7 +750,9 @@ class Labelate(UI.Application):
             result = result.resize((max(1, math.floor(result.width * factor)), max(1, math.floor(result.height * factor))),
                                    Image.Resampling.LANCZOS)
         self.preview = result
-        self.status = ' | '.join(errors) if errors else f"{size[0]} × {size[1]} px · {canvas['dpi']} DPI · {canvas.get('rotation', 0)}° view · Drag to move · Corners resize · Top handle rotates"
+        # Render errors replace any earlier input error; a clean render clears it.
+        self.error = ' | '.join(errors)
+        self.status = f"{size[0]} × {size[1]} px · {canvas['dpi']} DPI · {canvas.get('rotation', 0)}° view · Drag to move · Corners resize · Top handle rotates"
 
     def paint(self, canvas):
         c = self.template['canvas']

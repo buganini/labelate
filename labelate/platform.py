@@ -64,7 +64,7 @@ def font_controls(editor, obj, change):
             return
         resolved = system_fonts().get(family)
         if resolved is None:
-            editor.status = f'Cannot locate a Pillow-readable font file for {family}. Choose a font file instead.'
+            editor.error = f'Cannot locate a Pillow-readable font file for {family}. Choose a font file instead.'
             editor.notify()
             return
         path, index = resolved

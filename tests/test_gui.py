@@ -120,7 +120,7 @@ def test_browser_app(tmp_path, monkeypatch):
             obj('width_mm').value = 0
             assert obj['width_mm'] == width
             assert app.preview.tobytes() == before
-            assert 'positive' in app.status
+            assert 'positive' in app.error
             obj('content').value = 'State {state_value}'
             assert app.template['variables'] == {'state_value': ''}
             stale = obj('content')
