@@ -11,6 +11,10 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await expect(page.getByRole('button', {name:'Text',exact:true})).toBeVisible({timeout:120000});
   await expect(page.locator('#pui-status')).toBeHidden();
   await expect(page).toHaveTitle(/^Labelate v\d{9} — Label Template Editor \(PUI 1\.10 pyodide\)$/);
+  const releasesPopup = page.waitForEvent('popup');
+  await page.getByRole('button', {name:'Desktop version',exact:true}).click();
+  await expect.poll(async () => (await releasesPopup).url()).toBe('https://github.com/buganini/labelate/releases');
+  await (await releasesPopup).close();
   await page.getByRole('button', {name:'Text',exact:true}).click();
   const content = page.locator('textarea:not([readonly])');
   await expect(content).toHaveValue('SN: {SN}');

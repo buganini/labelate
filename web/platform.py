@@ -5,6 +5,7 @@ from .model import dumps
 from .renderer import BUNDLED_FONTS, DEFAULT_FAMILY, bundled_family, bundled_reference
 
 PRINTING = False
+DESKTOP_DOWNLOAD = 'https://github.com/buganini/labelate/releases'
 
 
 def attach(editor):

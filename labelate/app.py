@@ -248,6 +248,8 @@ class Labelate(UI.Application):
                                 self.button('New', self.new)
                                 self.button('Open .lbl', self.open)
                                 self.button('Save .lbl', self.save)
+                                if platform.DESKTOP_DOWNLOAD:
+                                    self.button('Desktop version', lambda: UI.OpenURL(platform.DESKTOP_DOWNLOAD), 'desktop-version')
                                 UI.Spacer()
                             with UI.Splitter().id('workspace'):
                                 UI.Canvas(self.paint).id('canvas').layout(width=720, minWidth=240, minHeight=300).mousedown(self.pointer_down).mousemove(self.pointer_move).mouseup(self.pointer_up)

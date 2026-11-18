@@ -12,6 +12,7 @@ from .renderer import BUNDLED_FONTS, DEFAULT_FAMILY, bundled_family, bundled_ref
 from PIL import ImageFont
 
 PRINTING = True
+DESKTOP_DOWNLOAD = None  # already the desktop app
 
 
 class CloseGuard(QtCore.QObject):

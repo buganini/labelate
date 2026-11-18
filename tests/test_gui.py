@@ -46,6 +46,7 @@ def test_browser_app(tmp_path, monkeypatch):
         try:
             await settle()
             assert any(isinstance(n, UI.Canvas) for n in nodes(app))
+            assert any(n._id == 'desktop-version' for n in nodes(app))
             app.add('text')
             await settle()
             oid = app.selected

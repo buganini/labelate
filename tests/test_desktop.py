@@ -21,6 +21,7 @@ def test_desktop_font_and_relative_save(tmp_path, monkeypatch, capsys):
         for _ in range(3):
             app.ui.processEvents()
     flush()
+    assert not any(n._id == 'desktop-version' for n in nodes(app))
     app.add('text')
     flush()
     from labelate.system_fonts import system_fonts
