@@ -24,8 +24,9 @@ for batch printing.
   Selected objects have corner resize handles and a rotation handle above the top
   edge.
 - **Text**: point size, normal/italic style, normal/bold weight, and color in
-  color mode. The desktop app offers a system font picker and font-file selection;
-  the web app uses Noto Sans CJK TC. Text clips to its box.
+  color mode. Both apps bundle Noto Sans CJK TC (default) and Noto Sans Mono,
+  listed first in the font picker; the desktop app adds installed fonts and
+  font-file selection. Text clips to its box.
 - **Image**: images preserve aspect ratio and are embedded in the template.
 - **Rect**: line width and corner radius; black outline, transparent interior.
 - **QR / Code128**: use whole-pixel modules and quiet zones. Increase size or DPI
