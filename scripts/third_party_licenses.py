@@ -9,11 +9,13 @@ ROOT = Path(__file__).resolve().parents[1]
 STANDARD_TEXTS = ROOT / 'resources/licenses'
 # SPDX ids whose full text must accompany the notice when a package ships none
 # (or only a short header pointing at the URL, as msgpack does for Apache-2.0).
-STANDARD_IDS = {'Apache-2.0': 'Apache-2.0.txt', 'LGPL-3.0': 'LGPL-3.0.txt', 'GPL-3.0': 'GPL-3.0.txt'}
-# A shipped file containing this text already carries the full license.
-FULL_TEXT_MARKERS = {'Apache-2.0': 'TERMS AND CONDITIONS FOR USE, REPRODUCTION',
-                     'LGPL-3.0': 'GNU LESSER GENERAL PUBLIC LICENSE',
-                     'GPL-3.0': 'GNU GENERAL PUBLIC LICENSE'}
+STANDARD_IDS = {'Apache-2.0': 'Apache-2.0.txt', 'LGPL-2.1': 'LGPL-2.1.txt', 'LGPL-3.0': 'LGPL-3.0.txt',
+                'GPL-3.0': 'GPL-3.0.txt'}
+# A shipped file containing all of these texts already carries the full license.
+FULL_TEXT_MARKERS = {'Apache-2.0': ('TERMS AND CONDITIONS FOR USE, REPRODUCTION',),
+                     'LGPL-2.1': ('GNU LESSER GENERAL PUBLIC LICENSE', 'Version 2.1, February 1999'),
+                     'LGPL-3.0': ('GNU LESSER GENERAL PUBLIC LICENSE', 'Version 3, 29 June 2007'),
+                     'GPL-3.0': ('GNU GENERAL PUBLIC LICENSE',)}
 LICENSE_FILE = re.compile(r'(?i)^(licen[cs]e|copying|notice)')
 
 
@@ -122,7 +124,7 @@ def render(entries, notes=()):
             out += ['', f'--- {name} ---', '', text.rstrip(), '']
         license = entry['license'].replace('Apache Software License', 'Apache-2.0')
         needed = [i for i in STANDARD_IDS if i in license
-                  and not any(FULL_TEXT_MARKERS[i] in text for _, text in entry['files'])]
+                  and not any(all(marker in text for marker in FULL_TEXT_MARKERS[i]) for _, text in entry['files'])]
         standard.update(needed)
         if needed:
             out += ['', f"Full text of {', '.join(needed)}: see the end of this file.", '']

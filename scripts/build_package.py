@@ -38,19 +38,17 @@ fonts = fetch_fonts.fetch()
 
 
 def libusb_entry():
-    """pyusb loads libusb from the build machine and PyInstaller bundles it (LGPL-2.1)."""
+    """libusb-package's libusb (LGPL-2.1) is bundled at the app root by its PyInstaller hook."""
+    from importlib.metadata import PackageNotFoundError, version
+    from labelate.printing import bundled_libusb
+    if not bundled_libusb():
+        return None
     try:
-        import usb.backend.libusb1
-        backend = usb.backend.libusb1.get_backend()
-    except ImportError:
-        return None
-    if backend is None:
-        return None
-    library = Path(backend.lib._name).resolve()
-    root = next((parent for parent in library.parents if (parent / "COPYING").is_file()), None)
-    return {"name": "libusb-1.0", "version": root.name if root else library.name, "license": "LGPL-2.1-or-later",
-            "homepage": "https://github.com/libusb/libusb",
-            "files": [("COPYING", (root / "COPYING").read_text(encoding="utf-8"))] if root else []}
+        libusb_version = version("libusb-package").rsplit(".", 1)[0]  # 1.0.30.1 ships libusb 1.0.30
+    except PackageNotFoundError:
+        libusb_version = ""
+    return {"name": "libusb-1.0", "version": libusb_version, "license": "LGPL-2.1-or-later",
+            "homepage": "https://github.com/libusb/libusb", "files": []}
 
 
 libusb = libusb_entry()

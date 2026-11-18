@@ -56,7 +56,7 @@ def test_check_printers_reports_every_brand():
     result = subprocess.run([sys.executable, '-m', 'labelate', '--check-printers'], cwd=ROOT,
                             capture_output=True, text=True, env={'QT_QPA_PLATFORM': 'offscreen', 'PATH': ''})
     lines = result.stdout.strip().splitlines()
-    assert [line.split(':')[0] for line in lines] == list(printing.PACKAGES)
+    assert [line.split(':')[0] for line in lines] == [*printing.PACKAGES, 'USB']
     assert result.returncode == (0 if all(': ok' in line for line in lines) else 1), result.stderr
 
 

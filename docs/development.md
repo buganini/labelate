@@ -111,8 +111,19 @@ printer driver (`--collect-all`, because `printing.module()` imports them by nam
 bleak's platform backends. On macOS it sets the bundle identifier
 `io.github.buganini.labelate`, the release version and `NSBluetoothAlwaysUsageDescription`
 (macOS terminates apps that use Bluetooth without it), then re-signs ad hoc or with the
-given Developer ID. pyusb's libusb is bundled from the build machine and listed in the
-notices. `--check-printers` imports every driver module and exits non-zero on failure.
+given Developer ID. `--check-printers` imports every driver module, reports which libusb
+pyusb loaded, and exits non-zero on failure.
+
+### USB and libusb
+
+brother_ql and pytsc talk USB through pyusb, which needs a libusb shared library.
+Windows has none, so pyusb reported "No backend available". The `brother`, `tsc` and
+`printers` extras therefore install `libusb-package` (Apache-2.0, bundling libusb
+1.0.30 under LGPL-2.1); `printing.prepare_usb()` loads that library into pyusb before
+either driver runs, and its PyInstaller hook copies it to the bundle root, where
+`bundled_libusb()` also looks. On Windows libusb can only open a printer bound to the
+WinUSB driver (for example via Zadig); a printer bound to the Windows printer driver
+stays invisible to the USB backend.
 
 ## CI and GitHub Pages
 

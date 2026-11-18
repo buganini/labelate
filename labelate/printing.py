@@ -2,6 +2,8 @@
 from dataclasses import dataclass
 import importlib
 import math
+from pathlib import Path
+import sys
 
 from .model import loads, dumps
 from .renderer import render
@@ -35,11 +37,59 @@ def check_drivers():
             lines.append(f'{brand}: FAILED {exc}')
         else:
             lines.append(f'{brand}: ok ({package} {versions.get(package, "version unknown")})')
+    try:
+        prepare_usb()
+        import usb.backend.libusb1
+        backend = usb.backend.libusb1.get_backend()
+    except ImportError:
+        backend = None
+    if backend is None:
+        ok = False
+        lines.append('USB: FAILED no libusb backend (Brother/TSC USB would report "No backend available")')
+    else:
+        lines.append(f'USB: ok ({backend.lib._name})')
     return ok, lines
+
+
+USB_BRANDS = ('Brother', 'TSC')
+LIBUSB_NAMES = ('libusb-1.0.dll', 'libusb-1.0.dylib', 'libusb-1.0.so')
+
+
+def bundled_libusb():
+    """Path of the libusb shipped by libusb-package or bundled into a PyInstaller build."""
+    try:
+        import libusb_package
+        path = libusb_package.get_library_path()
+    except ImportError:
+        path = None
+    if path:
+        return str(path)
+    # libusb-package's PyInstaller hook places the library at the bundle root.
+    base = getattr(sys, '_MEIPASS', None)
+    return next((str(Path(base) / name) for name in LIBUSB_NAMES if base and (Path(base) / name).is_file()), None)
+
+
+def prepare_usb():
+    """Load libusb for pyusb before brother_ql/pytsc call usb.core.find().
+
+    Without a system libusb (always the case on Windows) pyusb raises
+    "No backend available". pyusb caches the first loaded libusb1 backend, so later
+    usb.core.find() calls without a backend argument reuse this one.
+    """
+    path = bundled_libusb()
+    if not path:
+        return
+    try:
+        import usb.backend.libusb1
+    except ImportError:
+        return
+    usb.backend.libusb1.get_backend(find_library=lambda candidate: path)
 
 
 def module(brand, suffix):
     package = PACKAGES[brand]
+    if brand in USB_BRANDS:
+        prepare_usb()
     try:
         return importlib.import_module(package + '.' + suffix)
     except ModuleNotFoundError as exc:

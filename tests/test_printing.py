@@ -201,3 +201,33 @@ def test_dither_setting_is_passed_to_every_driver(monkeypatch, brand, dither):
 
 def test_settings_default_to_dither():
     assert p.settings('TSC')['dither'] is True
+
+
+def test_prepare_usb_loads_the_bundled_libusb(monkeypatch, tmp_path):
+    # Windows has no system libusb, so pyusb raised "No backend available" for Brother/TSC.
+    import sys
+    import types
+    from labelate import printing
+    library = tmp_path / 'libusb-1.0.dll'
+    library.write_bytes(b'')
+    calls = []
+    libusb1 = types.SimpleNamespace(get_backend=lambda find_library=None: calls.append(find_library('usb-1.0')))
+    usb = types.ModuleType('usb')
+    backend = types.ModuleType('usb.backend')
+    backend.libusb1 = libusb1
+    usb.backend = backend
+    monkeypatch.setitem(sys.modules, 'usb', usb)
+    monkeypatch.setitem(sys.modules, 'usb.backend', backend)
+    monkeypatch.setitem(sys.modules, 'usb.backend.libusb1', libusb1)
+    monkeypatch.setitem(sys.modules, 'libusb_package', types.SimpleNamespace(get_library_path=lambda: None))
+    # Frozen builds: libusb-package's hook puts the library at the bundle root.
+    monkeypatch.setattr(sys, '_MEIPASS', str(tmp_path), raising=False)
+    assert printing.bundled_libusb() == str(library)
+    printing.prepare_usb()
+    assert calls == [str(library)]
+    # Only USB drivers trigger it.
+    monkeypatch.setattr(printing, 'prepare_usb', lambda: calls.append('again'))
+    monkeypatch.setattr(printing.importlib, 'import_module', lambda name: types.SimpleNamespace())
+    printing.module('Niim', 'models')
+    printing.module('TSC', 'models')
+    assert calls == [str(library), 'again']
