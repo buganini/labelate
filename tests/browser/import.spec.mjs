@@ -19,7 +19,7 @@ test('web keeps Noto font and imports CSV and XLSX', async ({page}) => {
   await page.goto('/');
   await expect(page.getByRole('button', {name:'Text', exact:true})).toBeVisible({timeout:120000});
   await page.getByRole('button', {name:'Text', exact:true}).click();
-  await expect(page.getByText('Noto Sans CJK TC', {exact:true})).toBeVisible();
+  await expect(page.locator('select option:checked', {hasText:'Noto Sans CJK TC'})).toHaveCount(1);
   await expect(page.getByRole('button', {name:'Choose font…'})).toHaveCount(0);
   await page.getByRole('tab', {name:'Data', exact:true}).click();
   await page.getByRole('button', {name:'Import XLSX/CSV', exact:true}).click();

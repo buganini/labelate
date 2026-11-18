@@ -8,6 +8,7 @@ from PySide6 import QtCore, QtWidgets
 
 from .model import dumps
 from .system_fonts import system_fonts
+from .renderer import BUNDLED_FONTS, DEFAULT_FAMILY, bundled_family, bundled_reference
 from PIL import ImageFont
 
 PRINTING = True
@@ -42,8 +43,10 @@ def modified(value):
 
 
 def font_family(obj):
+    if not obj['font'] or bundled_family(obj['font']):
+        return bundled_family(obj['font']) or DEFAULT_FAMILY
     try:
-        return ImageFont.truetype(obj['font'], 12, index=obj.get('font_index', 0)).getname()[0] if obj['font'] else ''
+        return ImageFont.truetype(obj['font'], 12, index=obj.get('font_index', 0)).getname()[0]
     except (OSError, ValueError):
         return ''
 
@@ -53,6 +56,11 @@ def font_controls(editor, obj, change):
 
     def select_family(event):
         family = inputs['font_family']
+        if family in BUNDLED_FONTS:
+            with editor.state:
+                obj['font_index'] = 0
+                change('font', bundled_reference(family))
+            return
         resolved = system_fonts().get(family)
         if resolved is None:
             editor.status = f'Cannot locate a Pillow-readable font file for {family}. Choose a font file instead.'
@@ -65,10 +73,12 @@ def font_controls(editor, obj, change):
 
     with UI.HBox():
         UI.Label('Font')
-        UI.FontComboBox(inputs('font_family')).id('font-family').change(select_family)
+        # Bundled fonts stay pinned above the installed families.
+        families = [*BUNDLED_FONTS, *sorted(system_fonts(), key=str.casefold)]
+        UI.FontComboBox(inputs('font_family'), fonts=families).id('font-family').change(select_family)
     with UI.HBox():
         UI.Label('Font file')
-        UI.TextField(obj('font'), placeholder='Default font').id('font')
+        UI.TextField(obj('font'), placeholder=f'Default font ({DEFAULT_FAMILY})').id('font')
         def choose():
             path = UI.OpenFile(title='Choose font', types={'Fonts': ['ttf', 'otf', 'ttc']})
             if path:
@@ -89,7 +99,7 @@ def prepare_template(template):
 def save_document(template, path, project_dir):
     document = copy.deepcopy(template)
     for obj in document['objects']:
-        if obj['type'] == 'text' and obj.get('font'):
+        if obj['type'] == 'text' and obj.get('font') and not bundled_family(obj['font']):
             obj['font'] = os.path.relpath(Path(obj['font']).expanduser().resolve(), Path(path).resolve().parent)
     Path(path).write_bytes(dumps(document))
     return f'Saved {path}'

@@ -26,7 +26,7 @@ labelate = "labelate.app:main"
 include = ["labelate*"]
 
 [tool.setuptools.package-data]
-labelate = ["icon.svg"]
+labelate = ["icon.svg", "fonts/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

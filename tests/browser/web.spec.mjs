@@ -13,7 +13,10 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   await page.getByRole('button', {name:'Text',exact:true}).click();
   const content = page.locator('textarea:not([readonly])');
   await expect(content).toHaveValue('SN: {SN}');
-  await expect(page.getByText('Noto Sans CJK TC',{exact:true})).toBeVisible();
+  const fontPicker = page.getByRole('combobox').filter({has:page.getByRole('option',{name:'Noto Sans Mono',exact:true})});
+  await expect(fontPicker.locator('option', {hasText:/./})).toHaveText(['Noto Sans CJK TC','Noto Sans Mono']);
+  await expect(fontPicker.locator('option:checked')).toHaveText('Noto Sans CJK TC');
+  await fontPicker.selectOption({label:'Noto Sans Mono'});
   await expect(page.getByRole('button',{name:'Choose font…'})).toHaveCount(0);
   await content.fill('標籤 {customer}\n第二行');
   await content.press('Tab');
@@ -66,6 +69,7 @@ test('browser boots, edits, drags and downloads LBL/PNG', async ({page}) => {
   expect([json.canvas.width_mm,json.canvas.height_mm]).toEqual([100,60]);
   expect(json.data_rows).toEqual([{customer:'Bob'}]);
   expect(json.objects[0].content).toBe('標籤 {customer}\n第二行');
+  expect(json.objects[0].font).toBe('bundled:Noto Sans Mono');
   expect(json.variables.customer).toBe('Ada');
   expect(json.objects[0].x_mm).toBeCloseTo(10,0);
   expect(json.objects[0].y_mm).toBeCloseTo(12,0);

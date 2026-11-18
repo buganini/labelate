@@ -21,8 +21,8 @@ Older templates using `mono` are loaded as `greyscale`. Values override
 saved defaults and are converted to strings. Missing variables, invalid assets,
 and unrenderable codes raise `ValueError`. Image bytes are decoded directly.
 Relative font paths in this API resolve against the working directory; the editor
-resolves them against the template directory. The browser always uses Noto Sans
-CJK TC. The standalone renderer accepts explicit font paths.
+resolves them against the template directory. The standalone renderer accepts
+explicit font paths and the bundled references described below.
 
 ## Template format
 
@@ -138,24 +138,27 @@ stop the batch, report completed submissions and uncertain current-label progres
 and never automatically resend. A queued/sent result does not claim physical
 printing; only a printer-confirmed result is shown as printed.
 
-## Desktop font handling
+## Font handling
 
-Desktop font selection uses PUI FontComboBox. The selected system family is resolved
-to a Pillow-readable font file; collection fonts also store a zero-based
-`font_index`. Manual font-file selection remains available. The web version
-continues to use bundled Noto Sans CJK TC. PUI is pinned to commit
-`eac5c6397d502c7cce077bd64813c4c615755305` for the QPUIQ 1.10 release.
+Labelate bundles two fonts in both the desktop package and the browser archive:
 
-## Default font details
+| Family | Template `font` value | Source |
+| --- | --- | --- |
+| Noto Sans CJK TC Regular 2.004 (default) | `""` | [noto-cjk Sans2.004](https://github.com/notofonts/noto-cjk/tree/Sans2.004) |
+| Noto Sans Mono Regular | `"bundled:Noto Sans Mono"` | [notofonts.github.io @ 15f23a0](https://github.com/notofonts/notofonts.github.io/tree/15f23a0fd72c87285f50e890af8cf64d82d588a3/fonts/NotoSansMono/hinted/ttf) |
 
-The web editor fixes text rendering to **Noto Sans CJK TC Regular 2.004**.
+Both are under the [SIL Open Font License 1.1](https://openfontlicense.org/).
+The font picker lists the bundled families first. Desktop then lists installed
+families (resolved to a Pillow-readable file; collection fonts also store a
+zero-based `font_index`), and manual font-file selection remains available. The
+web version offers only the bundled fonts and resets other font paths to the
+default when a template is opened.
 
-- [Noto CJK project](https://github.com/notofonts/noto-cjk)
-- [Pinned font download](https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf)
-- [SIL Open Font License](https://github.com/notofonts/noto-cjk/blob/Sans2.004/LICENSE)
+Font binaries are **not checked into this repository**. `python scripts/fetch_fonts.py`
+downloads them into ignored `labelate/fonts/` and verifies their SHA-256 hashes;
+`scripts/build_package.py` and `scripts/build_pyodide.py` run it automatically.
+The CJK font adds about 16 MB before compression. Without the downloaded files a
+bundled reference falls back to an installed copy of that family, then to the
+platform/Pillow default.
 
-Font binaries are **not checked into this repository**. The build downloads the
-font and license into ignored `.build/fonts/`, verifies their SHA-256 hashes,
-and includes them in the browser archive. This adds about 16 MB before ZIP
-compression. Source-only Python usage can pass a font path explicitly; without
-the built font, the renderer retains its platform/Pillow fallback.
+PUI is pinned to commit `eac5c6397d502c7cce077bd64813c4c615755305` for the QPUIQ 1.10 release.

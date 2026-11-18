@@ -13,10 +13,12 @@ os.chdir(PKG_BASE)
 
 import PyInstaller.__main__
 from scripts.third_party_licenses import installed_closure, render
+from scripts import fetch_fonts
 
 notices = Path(PKG_BASE, ".build/THIRD_PARTY_LICENSES.txt")
 notices.parent.mkdir(parents=True, exist_ok=True)
-notices.write_text(render(installed_closure("labelate")), encoding="utf-8")
+fonts = fetch_fonts.fetch()
+notices.write_text(render([*installed_closure("labelate"), *fetch_fonts.notices()]), encoding="utf-8")
 
 # macOS
 ## brew install create-dmg
@@ -47,6 +49,7 @@ PyInstaller.__main__.run([
     "--add-data", f"{os.path.join(PKG_BASE, 'LICENSE')}{os.pathsep}.",
     "--add-data", f"{notices}{os.pathsep}.",
     "--add-data", f"{os.path.join(PKG_BASE, 'labelate', 'icon.svg')}{os.pathsep}labelate",
+    *(arg for font in fonts for arg in ("--add-data", f"{font}{os.pathsep}labelate/fonts")),
     *pyinstaller_args,
 ])
 

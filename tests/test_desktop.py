@@ -26,7 +26,15 @@ def test_desktop_font_and_relative_save(tmp_path, monkeypatch, capsys):
     from labelate.system_fonts import system_fonts
     from labelate.renderer import load_font
     picker = next(n for n in nodes(app) if n._id == 'font-family')
-    family = next(name for name in system_fonts() if picker.ui.findText(name) >= 0)
+    from labelate.renderer import BUNDLED_FONTS
+    # Bundled fonts are pinned to the top of the desktop picker.
+    assert [picker.ui.itemText(i) for i in range(len(BUNDLED_FONTS))] == list(BUNDLED_FONTS)
+    picker.choose(picker.ui.findText('Noto Sans Mono'))
+    flush()
+    assert app.current()['font'] == 'bundled:Noto Sans Mono'
+    assert app.object_inputs[app.current()['id']]['font_family'] == 'Noto Sans Mono'
+    picker = next(n for n in nodes(app) if n._id == 'font-family')
+    family = next(name for name in system_fonts() if name not in BUNDLED_FONTS and picker.ui.findText(name) >= 0)
     picker.choose(picker.ui.findText(family))
     flush()
     obj = app.current()

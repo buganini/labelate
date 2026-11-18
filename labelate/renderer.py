@@ -9,13 +9,44 @@ from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps
 from .model import loads, substitute, draw_order
 from .geometry import view_size
 
-DEFAULT_FONT = Path(__file__).with_name('fonts') / 'NotoSansCJKtc-Regular.otf'
+# Fonts shipped with the desktop package and the browser archive (scripts/fetch_fonts.py).
+# Templates reference them as "bundled:<family>" so the value never looks like a path;
+# the first entry is the default font, stored as "".
+FONT_DIR = Path(__file__).with_name('fonts')
+BUNDLED_FONTS = {'Noto Sans CJK TC': 'NotoSansCJKtc-Regular.otf', 'Noto Sans Mono': 'NotoSansMono-Regular.ttf'}
+BUNDLED_PREFIX = 'bundled:'
+DEFAULT_FAMILY = next(iter(BUNDLED_FONTS))
+DEFAULT_FONT = FONT_DIR / BUNDLED_FONTS[DEFAULT_FAMILY]
+
+
+def bundled_reference(family):
+    """Template "font" value for a bundled family; the default font is stored as ""."""
+    return '' if family == DEFAULT_FAMILY else BUNDLED_PREFIX + family
+
+
+def bundled_family(font):
+    """Family name for a "bundled:<family>" font reference, else None."""
+    if isinstance(font, str) and font.startswith(BUNDLED_PREFIX) and font[len(BUNDLED_PREFIX):] in BUNDLED_FONTS:
+        return font[len(BUNDLED_PREFIX):]
+    return None
+
 
 def pixels(mm, dpi):
     return max(1, round(mm * dpi / 25.4))
 
 
 def load_font(path, size, index=0):
+    family = bundled_family(path)
+    if family:
+        bundled = FONT_DIR / BUNDLED_FONTS[family]
+        if bundled.is_file():
+            return ImageFont.truetype(str(bundled), size)
+        # Source checkouts have no bundled files: use an installed copy of the family.
+        from .system_fonts import system_fonts
+        installed = system_fonts().get(family)
+        if installed:
+            return ImageFont.truetype(installed[0], size, index=installed[1])
+        path, index = '', 0
     if path:
         return ImageFont.truetype(path, size, index=index)
     if DEFAULT_FONT.is_file():

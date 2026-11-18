@@ -1,17 +1,14 @@
 """Build a pinned browser-only Python archive; run npm run build afterwards."""
 import argparse
-import hashlib
 import json
 import shutil
 import subprocess
 import sys
 import zipfile
-from urllib.request import urlopen
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PUI_COMMIT = 'eac5c6397d502c7cce077bd64813c4c615755305'  # QPUIQ 1.10 release
-FONT_BASE = 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/'
 PYODIDE_VERSION = '314.0.7'
 WHEELS = ('qrcode==8.2', 'python-barcode==0.16.1', 'msgpack==1.1.2', 'openpyxl==3.1.5', 'et-xmlfile==2.0.0')
 CDN_NOTE = (
@@ -33,29 +30,10 @@ def browser_source(path):
     return source
 
 
-def font_assets():
-    cache = ROOT / '.build/fonts'
-    cache.mkdir(parents=True, exist_ok=True)
-    for name, remote, checksum in (
-        ('NotoSansCJKtc-Regular.otf', 'Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf',
-         'dce08bd4fd91aa8aa76ed8fea4b694c2dfb8550f67871e326843212ddbeb88b4'),
-        ('OFL.txt', 'LICENSE', '6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2'),
-    ):
-        path = cache / name
-        if not path.exists():
-            with urlopen(FONT_BASE + remote, timeout=120) as response:
-                data = response.read()
-            if hashlib.sha256(data).hexdigest() != checksum:
-                raise ValueError(f'Checksum mismatch: {name}')
-            path.write_bytes(data)
-        if hashlib.sha256(path.read_bytes()).hexdigest() != checksum:
-            raise ValueError(f'Cached font checksum mismatch: {name}')
-        yield path
-
-
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from third_party_licenses import from_wheel, render
+    import fetch_fonts
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pui-source', type=Path, default=ROOT / '.build/PUI')
@@ -67,7 +45,7 @@ def main():
     subprocess.run(['git', '-C', str(source), 'diff', '--exit-code', 'HEAD', '--', 'PUI', 'browser-client'], check=True)
     output = ROOT / 'dist/pyodide'
     output.mkdir(parents=True, exist_ok=True)
-    fonts = list(font_assets())
+    fonts = fetch_fonts.fetch()
     wheels = ROOT / '.build/wheels'
     wheels.mkdir(parents=True, exist_ok=True)
     subprocess.run([sys.executable, '-m', 'pip', 'download', '--no-deps', '--only-binary=:all:',
@@ -77,9 +55,7 @@ def main():
     notices = render([
         {'name': 'PUI (QPUIQ)', 'version': PUI_COMMIT, 'license': 'MIT', 'homepage': 'https://github.com/buganini/PUI',
          'files': [('LICENSE.txt', (source / 'LICENSE.txt').read_text(encoding='utf-8'))]},
-        {'name': 'Noto Sans CJK TC Regular', 'version': '2.004', 'license': 'OFL-1.1',
-         'homepage': 'https://github.com/notofonts/noto-cjk',
-         'files': [('LICENSE', (ROOT / '.build/fonts/OFL.txt').read_text(encoding='utf-8'))]},
+        *fetch_fonts.notices(),
         *map(from_wheel, wheel_files),
     ], notes=CDN_NOTE)
     with zipfile.ZipFile(output / 'app.zip', 'w', compression=zipfile.ZIP_DEFLATED) as archive:
@@ -109,13 +85,14 @@ def main():
         shutil.copyfile(ROOT / 'web' / name, output / name)
     shutil.copyfile(ROOT / 'LICENSE', output / 'LICENSE')
     shutil.copyfile(source / 'LICENSE.txt', output / 'PUI-LICENSE.txt')
-    shutil.copyfile(ROOT / '.build/fonts/OFL.txt', output / 'FONT-LICENSE.txt')
+    shutil.copyfile(fetch_fonts.FONT_DIR / 'OFL.txt', output / 'FONT-LICENSE.txt')
+    shutil.copyfile(fetch_fonts.FONT_DIR / 'NotoSansMono-OFL.txt', output / 'FONT-LICENSE-NotoSansMono.txt')
     (output / 'THIRD_PARTY_LICENSES.txt').write_text(notices, encoding='utf-8')
     (output / '.nojekyll').touch()
     (output / 'build-info.json').write_text(json.dumps({
         'qpuiq': '1.10', 'pui_commit': PUI_COMMIT, 'pyodide': PYODIDE_VERSION,
         'qrcode': '8.2', 'python-barcode': '0.16.1', 'license': 'MIT',
-        'font': 'Noto Sans CJK TC Regular 2.004', 'msgpack': '1.1.2', 'openpyxl': '3.1.5', 'et-xmlfile': '2.0.0'
+        'fonts': [entry['name'] + ' ' + entry['version'] for entry in fetch_fonts.NOTICES], 'msgpack': '1.1.2', 'openpyxl': '3.1.5', 'et-xmlfile': '2.0.0'
     }, indent=2) + '\n')
     print(f'Prepared {output}')
 
