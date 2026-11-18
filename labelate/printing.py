@@ -28,6 +28,7 @@ class Printer:
     identifier: str
     backend: str
     name: str
+    model: str = ''  # model identifier reported by discovery, when the driver knows it
 
     @property
     def display(self):
@@ -48,7 +49,7 @@ def discover(brand):
             continue
         seen.add((backend, identifier))
         name = record.get('name') or record.get('description') or record.get('model') or brand
-        devices.append(Printer(brand, identifier, backend, str(name)))
+        devices.append(Printer(brand, identifier, backend, str(name), str(record.get('model') or '')))
     return devices, warnings
 
 
@@ -66,8 +67,18 @@ def stocks():
     return list(module('Brother', 'labels').LabelsManager().iter_identifiers())
 
 
-def settings(brand):
-    return {'model': '', 'stock': '62', 'media': 'gap', 'gap': '2', 'baudrate': '9600'}
+def settings(brand, printer=None):
+    """Default settings, with the model prefilled when discovery reported a known one."""
+    model = printer.model if printer is not None and printer.model in models(brand) else ''
+    return {'model': model, 'stock': '62', 'media': 'gap', 'gap': '2', 'baudrate': '9600'}
+
+
+def needs_settings(brand, config):
+    """Whether the user must confirm settings before the first print.
+
+    Niim only needs a model; Brother stock and TSC media cannot be detected from the device.
+    """
+    return brand != 'Niim' or not config.get('model')
 
 
 def positive_integer(value, name='Copies'):

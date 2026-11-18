@@ -130,3 +130,52 @@ def test_module_error_distinguishes_missing_from_broken(monkeypatch):
     monkeypatch.setattr(importlib, 'import_module', dependency)
     with pytest.raises(RuntimeError, match="pyniim is installed but failed to import: No module named 'bleak'"):
         printing.module('Niim', 'models')
+
+
+def test_discovered_niim_model_prefills_and_skips_settings():
+    pytest.importorskip('pyniim')
+    found = p.Printer('Niim', 'AA:BB', 'bleak', 'M2_H-1234', 'M2_H')
+    config = p.settings('Niim', found)
+    assert config['model'] == 'M2_H'
+    assert not p.needs_settings('Niim', config)
+    # Unknown or missing models still ask, and Brother/TSC always ask the first time.
+    assert p.settings('Niim', p.Printer('Niim', 'AA:BB', 'bleak', 'X', 'NOPE'))['model'] == ''
+    assert p.needs_settings('Niim', p.settings('Niim'))
+    assert p.needs_settings('TSC', {'model': 'TTP-342'})
+    assert p.needs_settings('Brother', {'model': 'QL-800'})
+
+
+def test_app_prints_niim_without_modal(monkeypatch):
+    pytest.importorskip('pyniim')
+    from labelate.app import Labelate
+    from labelate import platform as desktop
+    app = Labelate()
+    app.notify = lambda: None
+    app.brand = 'Niim'
+    found = p.Printer('Niim', 'AA:BB', 'bleak', 'M2_H-1234', 'M2_H')
+    app.printers, app.printer_choice = [found], found.display
+    started = []
+    monkeypatch.setattr(desktop, 'PRINTING', True)
+    monkeypatch.setattr(app, 'run_task', lambda message, work, complete: started.append(message))
+    app.request_print()
+    assert not app.settings_open
+    assert started == ['Preparing print…']
+    assert app.printer_configs[app.config_key()]['model'] == 'M2_H'
+    # The model can still be changed afterwards, starting from the remembered value.
+    app.configure_printer(False)
+    assert app.settings_open and app.settings_draft['model'] == 'M2_H'
+
+
+def test_app_still_asks_when_model_unknown(monkeypatch):
+    pytest.importorskip('pyniim')
+    from labelate.app import Labelate
+    from labelate import platform as desktop
+    app = Labelate()
+    app.notify = lambda: None
+    app.brand = 'Niim'
+    found = p.Printer('Niim', 'AA:BB', 'bleak', 'Mystery')
+    app.printers, app.printer_choice = [found], found.display
+    monkeypatch.setattr(desktop, 'PRINTING', True)
+    monkeypatch.setattr(app, 'run_task', lambda *a: pytest.fail('printed without a model'))
+    app.request_print()
+    assert app.settings_open and app.pending_print and app.settings_draft['model'] == ''

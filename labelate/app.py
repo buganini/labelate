@@ -437,7 +437,8 @@ class Labelate(UI.Application):
         try:
             self.model_choices = printing.models(self.brand)
             self.stock_choices = printing.stocks() if self.brand == 'Brother' else []
-            self.settings_draft = dict(self.printer_configs.get(self.config_key(), printing.settings(self.brand)))
+            self.settings_draft = dict(self.printer_configs.get(
+                self.config_key(), printing.settings(self.brand, self.selected_printer())))
             self.pending_print = pending
             self.settings_open = True
         except Exception as exc:
@@ -505,8 +506,12 @@ class Labelate(UI.Application):
                 raise ValueError('No data rows to print')
             config = self.printer_configs.get(self.config_key())
             if not config:
-                self.configure_printer(True)
-                return
+                defaults = printing.settings(self.brand, self.selected_printer())
+                if printing.needs_settings(self.brand, defaults):
+                    self.configure_printer(True)
+                    return
+                # Everything is known from discovery: remember it and print without asking.
+                config = self.printer_configs[self.config_key()] = defaults
             template_bytes = dumps(self.snapshot())
             printer = self.selected_printer()
             config = dict(config)
