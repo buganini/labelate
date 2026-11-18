@@ -4,7 +4,7 @@ from io import BytesIO
 
 import barcode
 import qrcode
-from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps
 
 from .model import loads, substitute, draw_order
 from .geometry import view_size
@@ -100,32 +100,7 @@ def object_image(obj, canvas, values):
 
 
 
-# Same default as the printer drivers: ink when darkness reaches 70 % of the
-# (100 - threshold) cut-off used by brother_ql, pyniim and pytsc.
-INK_BELOW = 255 - int(0.3 * 255)
-
-
-def dithered(obj):
-    """Photos and grey text need dithering; barcodes, QR codes, rects and black text stay crisp."""
-    if obj['type'] == 'image':
-        return True
-    return obj['type'] == 'text' and ImageColor.getcolor(obj.get('color', '#000000'), 'L') != 0
-
-
-def binarize(tile, dither):
-    """Turn an RGBA tile into pure black/white at device resolution, keeping its coverage."""
-    flat = Image.alpha_composite(Image.new('RGBA', tile.size, 'white'), tile).convert('L')
-    if dither:
-        ink = flat.convert('1', dither=Image.Dither.FLOYDSTEINBERG).convert('L').point(lambda v: 255 - v)
-    else:
-        ink = flat.point(lambda v: 255 if v < INK_BELOW else 0)
-    # Opaque areas (e.g. a barcode's white quiet zone) still cover what lies beneath.
-    cover = ImageChops.lighter(tile.getchannel('A').point(lambda a: 255 if a >= 128 else 0), ink)
-    out = Image.merge('RGBA', (*[ink.point(lambda v: 255 - v)] * 3, cover))
-    return out
-
-
-def composite_object(result, tile, obj, dpi, mono=False):
+def composite_object(result, tile, obj, dpi):
     # Rotate clockwise about the unrotated object's center.
     x = round(obj['x_mm'] * dpi / 25.4)
     y = round(obj['y_mm'] * dpi / 25.4)
@@ -135,12 +110,10 @@ def composite_object(result, tile, obj, dpi, mono=False):
         tile = tile.rotate(-angle, resample=Image.Resampling.BICUBIC, expand=True)
         x += round((original[0] - tile.width) / 2)
         y += round((original[1] - tile.height) / 2)
-    if mono:
-        tile = binarize(tile, dithered(obj))
     result.alpha_composite(tile, (x, y))
 
 
-def render(lbl_bytes, variables, mono=False):
+def render(lbl_bytes, variables):
     """Render a v2 MessagePack template to RGB or 8-bit greyscale PIL.Image.Image.
 
     Explicit variables override template defaults. Missing variables, invalid
@@ -148,8 +121,6 @@ def render(lbl_bytes, variables, mono=False):
     Relative font paths are resolved against the working directory.
     Draw upright objects on the oriented canvas, then rotate the composed
     image by -rotation to restore the physical label dimensions.
-    mono=True (printer path, at device DPI) makes every object pure black/white:
-    images and grey text are dithered, everything else is thresholded.
     """
     template = loads(lbl_bytes)
     canvas = template["canvas"]
@@ -159,7 +130,7 @@ def render(lbl_bytes, variables, mono=False):
     for obj in draw_order(template["objects"]):
         try:
             tile = object_image(obj, canvas, values)
-            composite_object(result, tile, obj, canvas["dpi"], mono)
+            composite_object(result, tile, obj, canvas["dpi"])
         except Exception as exc:
             raise ValueError(f"Object {obj['id']} ({obj['type']}): {exc}") from exc
     result = result.rotate(-canvas.get("rotation", 0), expand=True)

@@ -179,3 +179,25 @@ def test_app_still_asks_when_model_unknown(monkeypatch):
     monkeypatch.setattr(app, 'run_task', lambda *a: pytest.fail('printed without a model'))
     app.request_print()
     assert app.settings_open and app.pending_print and app.settings_draft['model'] == ''
+
+
+@pytest.mark.parametrize('brand', ['Brother', 'Niim', 'TSC'])
+@pytest.mark.parametrize('dither', [False, True])
+def test_dither_setting_is_passed_to_every_driver(monkeypatch, brand, dither):
+    pytest.importorskip(p.PACKAGES[brand])
+    printer, config, template = fixture(brand)
+    config['dither'] = dither
+    calls = []
+    real_module = p.module
+    def module(b, suffix):
+        mod = real_module(b, suffix)
+        if suffix != 'conversion':
+            return mod
+        return SimpleNamespace(convert=lambda *a, **kw: calls.append(kw) or mod.convert(*a, **kw))
+    monkeypatch.setattr(p, 'module', module)
+    p.prepare(printer, config, dumps(template), {})
+    assert calls[0]['dither'] is dither
+
+
+def test_settings_default_to_dither():
+    assert p.settings('TSC')['dither'] is True

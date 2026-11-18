@@ -171,6 +171,7 @@ class Labelate(UI.Application):
             'printer-settings:printer-media': self.settings_draft.get('media', 'gap'),
             'printer-gap': self.settings_draft.get('gap', '2'),
             'printer-baud': self.settings_draft.get('baudrate', '9600'),
+            'printer-dither': bool(self.settings_draft.get('dither', True)),
         }
         for key in ('width_mm', 'height_mm', 'dpi'):
             value = canvas[key] if key == 'dpi' else display_length(canvas[key], unit)
@@ -458,6 +459,10 @@ class Labelate(UI.Application):
                         self.select('Stock', self.stock_choices, self.settings_draft.get('stock', '62'),
                                     lambda value: self.set_print_setting('stock', value), 'printer-stock')
                     UI.Label('Label dimensions must match stock. Keep objects inside printable margins.')
+                # The driver dithers the whole label: good for photos and grey text,
+                # but it also roughens the anti-aliased edges of rotated barcodes.
+                UI.Checkbox('Dither (photos and grey text)',
+                            self.input_state('printer-dither', lambda value: self.set_print_setting('dither', bool(value))))
                 if self.brand == 'TSC':
                     with UI.HBox():
                         self.select('Media', ['gap', 'continuous', 'black-mark'], self.settings_draft.get('media', 'gap'),

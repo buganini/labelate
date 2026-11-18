@@ -70,7 +70,7 @@ def stocks():
 def settings(brand, printer=None):
     """Default settings, with the model prefilled when discovery reported a known one."""
     model = printer.model if printer is not None and printer.model in models(brand) else ''
-    return {'model': model, 'stock': '62', 'media': 'gap', 'gap': '2', 'baudrate': '9600'}
+    return {'model': model, 'stock': '62', 'media': 'gap', 'gap': '2', 'baudrate': '9600', 'dither': True}
 
 
 def needs_settings(brand, config):
@@ -95,7 +95,7 @@ def prepare(printer, config, template_bytes, values):
     canvas = template['canvas']
     model = module(brand, 'models').ModelsManager().get_model_by_identifier(config['model'])
     canvas['dpi'] = 300 if brand == 'Brother' else model.dpi if brand == 'Niim' else model.dots_per_mm * 25.4
-    image = render(dumps(template), values, mono=True)
+    image = render(dumps(template), values)
     label = f"{canvas['width_mm']:g}x{canvas['height_mm']:g}"
     conversion = module(brand, 'conversion').convert
     raster_module = module(brand, 'raster')
@@ -119,14 +119,17 @@ def prepare(printer, config, template_bytes, values):
         if mask.getbbox():
             raise ValueError('Objects extend into Brother unprintable margins; move them inward')
         image = image.crop(box)
-        return conversion(raster_module.BrotherQLRaster(config['model']), [image], label, rotate=0, red=bool(spec.color))
+        # brother_ql only dithers single-colour stock; red/black stock is always thresholded.
+        return conversion(raster_module.BrotherQLRaster(config['model']), [image], label, rotate=0, red=bool(spec.color),
+                          dither=bool(config.get('dither', True)))
     if brand == 'Niim':
-        return conversion(raster_module.NiimbotRaster(config['model']), [image], label, rotate=0)
+        return conversion(raster_module.NiimbotRaster(config['model']), [image], label, rotate=0,
+                          dither=bool(config.get('dither', True)))
     gap = float(config['gap'])
     if not math.isfinite(gap) or gap < 0:
         raise ValueError('Gap must be a non-negative number in mm')
     return conversion(raster_module.TSPLRaster(config['model']), [image], label,
-                      rotate=0, gap=gap, media=config['media'])
+                      rotate=0, gap=gap, media=config['media'], dither=bool(config.get('dither', True)))
 
 
 def send(printer, config, job):

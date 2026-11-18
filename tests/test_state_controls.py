@@ -59,3 +59,42 @@ class StateControlsTests(unittest.TestCase):
             recur_delete(app, app, True)
             if qtapp:
                 qtapp.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+
+
+def nodes(node):
+    yield node
+    for child in node.children:
+        yield from nodes(child)
+
+
+class PrinterSettingsTests(unittest.TestCase):
+    def test_dither_checkbox_updates_settings(self):
+        from unittest import mock
+        from PUI import PySide6 as UI
+        from labelate import printing, platform as desktop
+        app = Labelate()
+        if QtWidgets.QApplication.instance():
+            app.ui = QtWidgets.QApplication.instance()
+        try:
+            with mock.patch.object(desktop, 'PRINTING', True), \
+                 mock.patch.object(printing, 'models', lambda brand: ['M2_H']), \
+                 mock.patch.object(printing, 'stocks', lambda: ['62']):
+                app.sync()
+                for brand in ('Niim', 'Brother', 'TSC'):
+                    app.brand = brand
+                    found = printing.Printer(brand, 'id', 'pyusb', 'Device', '')
+                    app.printers, app.printer_choice = [found], found.display
+                    app.configure_printer(False)
+                    app.sync()
+                    box = next(n for n in nodes(app) if isinstance(n, UI.Checkbox))
+                    self.assertTrue(box.ui.isChecked())  # dither is on by default
+                    box.ui.click()
+                    self.assertIs(app.settings_draft['dither'], False, brand)
+                    app.apply_print_settings()
+                    self.assertIs(app.printer_configs[app.config_key()]['dither'], False)
+                    app.sync()
+        finally:
+            qtapp = QtWidgets.QApplication.instance()
+            recur_delete(app, app, True)
+            if qtapp:
+                qtapp.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
