@@ -716,6 +716,14 @@ class Labelate(UI.Application):
         self.selected = oid
         self.notify()
 
+    PREVIEW_PIXELS = 1024 * 1024
+    PREVIEW_SIDE = 16384
+
+    @classmethod
+    def preview_paintable(cls, image):
+        return (image is not None and 1 <= min(image.size) and max(image.size) <= cls.PREVIEW_SIDE
+                and image.width * image.height <= cls.PREVIEW_PIXELS)
+
     def refresh_preview(self):
         canvas = self.template['canvas']
         size = tuple(pixels(length, canvas['dpi']) for length in view_size(canvas))
@@ -732,7 +740,12 @@ class Labelate(UI.Application):
             composite_object(result, tile, obj, canvas['dpi'])
         if canvas['mode'] == 'greyscale' and not errors:
             result = result.convert('L').convert('RGBA')
+        # PUI's loadRGBA accepts at most 16384 px per side and 1048576 px in total.
         result.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+        if result.width * result.height > self.PREVIEW_PIXELS:
+            factor = math.sqrt(self.PREVIEW_PIXELS / (result.width * result.height))
+            result = result.resize((max(1, math.floor(result.width * factor)), max(1, math.floor(result.height * factor))),
+                                   Image.Resampling.LANCZOS)
         self.preview = result
         self.status = ' | '.join(errors) if errors else f"{size[0]} × {size[1]} px · {canvas['dpi']} DPI · {canvas.get('rotation', 0)}° view · Drag to move · Corners resize · Top handle rotates"
 
@@ -746,8 +759,9 @@ class Labelate(UI.Application):
         x, y = (canvas.width-w)/2, (canvas.height-h)/2
         self.viewport = x, y, scale
         canvas.drawRect(0, 0, canvas.width, canvas.height, fill=0x000000)
-        resource = canvas.loadRGBA(self.preview.width, self.preview.height, self.preview.tobytes())
-        canvas.drawImage(resource, x, y, w, h)
+        # Check PUI's loadRGBA limits first: skip drawing rather than raising inside paint.
+        if self.preview_paintable(self.preview):
+            canvas.drawImage(canvas.loadRGBA(self.preview.width, self.preview.height, self.preview.tobytes()), x, y, w, h)
         obj = self.current()
         if obj:
             corners, rotation = self.transform_handles(obj)
