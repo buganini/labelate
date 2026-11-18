@@ -551,14 +551,14 @@ class Labelate(UI.Application):
         UI.Label('Label').style(fontWeight=700)
         with UI.HBox().id('dimensions-row'):
             self.number('Width', display_length(canvas['width_mm'], unit),
-                        lambda v: self.set_canvas('width_mm', millimetres(v, unit)), 'width_mm', .001).layout(width=40, minWidth=40)
+                        lambda v: self.set_canvas('width_mm', millimetres(v, unit)), 'width_mm', .001).layout(width=60, minWidth=60)
             self.number('Height', display_length(canvas['height_mm'], unit),
-                        lambda v: self.set_canvas('height_mm', millimetres(v, unit)), 'height_mm', .001).layout(width=40, minWidth=40)
+                        lambda v: self.set_canvas('height_mm', millimetres(v, unit)), 'height_mm', .001).layout(width=60, minWidth=60)
             self.select('Unit', list(UNIT_MM), unit, self.set_unit, 'unit')
             self.select('Rotation', ['0', '90', '180', '270'], str(canvas.get('rotation', 0)),
                         self.set_rotation, 'rotation')
         with UI.HBox().id('output-row'):
-            self.number('DPI', canvas['dpi'], lambda v: self.set_canvas('dpi', round(v)), 'dpi', 36, 2400).layout(width=40, minWidth=40)
+            self.number('DPI', canvas['dpi'], lambda v: self.set_canvas('dpi', round(v)), 'dpi', 36, 2400).layout(width=60, minWidth=60)
             self.select('Mode', ['Greyscale', 'Color'], canvas['mode'].title(), lambda v: self.set_canvas('mode', v.lower()), 'mode')
 
     def objects_panel(self):
