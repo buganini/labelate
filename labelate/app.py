@@ -550,9 +550,10 @@ class Labelate(UI.Application):
         unit = canvas['unit']
         UI.Label('Label').style(fontWeight=700)
         with UI.HBox().id('dimensions-row'):
-            for key, label in [('width_mm', 'Width'), ('height_mm', 'Height')]:
-                self.number(label, display_length(canvas[key], unit),
-                            lambda v, k=key: self.set_canvas(k, millimetres(v, unit)), key, .001).layout(width=40, minWidth=40)
+            self.number('Width', display_length(canvas['width_mm'], unit),
+                        lambda v: self.set_canvas('width_mm', millimetres(v, unit)), 'width_mm', .001).layout(width=40, minWidth=40)
+            self.number('Height', display_length(canvas['height_mm'], unit),
+                        lambda v: self.set_canvas('height_mm', millimetres(v, unit)), 'height_mm', .001).layout(width=40, minWidth=40)
             self.select('Unit', list(UNIT_MM), unit, self.set_unit, 'unit')
             self.select('Rotation', ['0', '90', '180', '270'], str(canvas.get('rotation', 0)),
                         self.set_rotation, 'rotation')
