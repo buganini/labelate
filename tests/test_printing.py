@@ -106,3 +106,27 @@ def test_brother_rejects_marks_in_margin():
     template['objects'] = [obj]
     with pytest.raises(ValueError, match='unprintable margins'):
         p.prepare(printer, config, dumps(template), {})
+
+
+def test_module_error_distinguishes_missing_from_broken(monkeypatch):
+    import importlib
+    from labelate import printing
+
+    def missing(name):
+        raise ModuleNotFoundError(f"No module named '{name.split('.')[0]}'", name=name.split('.')[0])
+    monkeypatch.setattr(importlib, 'import_module', missing)
+    with pytest.raises(RuntimeError, match=r"pip install -e '\.\[niim\]'"):
+        printing.module('Niim', 'models')
+
+    def broken(name):
+        raise ImportError('attempted relative import with no known parent package')
+    monkeypatch.setattr(importlib, 'import_module', broken)
+    with pytest.raises(RuntimeError, match='restart Labelate') as info:
+        printing.module('Niim', 'models')
+    assert 'pip install' not in str(info.value)
+
+    def dependency(name):
+        raise ModuleNotFoundError("No module named 'bleak'", name='bleak')
+    monkeypatch.setattr(importlib, 'import_module', dependency)
+    with pytest.raises(RuntimeError, match="pyniim is installed but failed to import: No module named 'bleak'"):
+        printing.module('Niim', 'models')

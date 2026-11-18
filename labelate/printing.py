@@ -10,10 +10,16 @@ PACKAGES = {'Brother': 'brother_ql', 'Niim': 'pyniim', 'TSC': 'pytsc'}
 
 
 def module(brand, suffix):
+    package = PACKAGES[brand]
     try:
-        return importlib.import_module(PACKAGES[brand] + '.' + suffix)
+        return importlib.import_module(package + '.' + suffix)
+    except ModuleNotFoundError as exc:
+        if exc.name != package:
+            raise RuntimeError(f'{package} is installed but failed to import: {exc}') from exc
+        raise RuntimeError(f"Install from the Labelate checkout: python -m pip install -e '.[{brand.lower()}]'") from exc
     except ImportError as exc:
-        raise RuntimeError(f"Install from the Labelate checkout: python -m pip install -e '.[{brand.lower()}]' ({exc})") from exc
+        # Installed but broken, e.g. upgraded while Labelate was running: restarting usually helps.
+        raise RuntimeError(f'{package} failed to import ({exc}); restart Labelate after installing or upgrading it') from exc
 
 
 @dataclass(frozen=True)
