@@ -97,6 +97,23 @@ trips, and PNG downloads. Install `.[dev,printers]` to run all offline printer
 conversion tests; without printer extras those tests are skipped. Automated tests
 never send real print jobs; physical output still requires hardware verification.
 
+## Desktop package
+
+```bash
+python -m pip install -e '.[printers]' pyinstaller
+python scripts/build_package.py            # macOS asks for a codesign identity
+python scripts/build_package.py --codesign-identity "" --no-dmg   # ad-hoc signed, no dmg
+dist/Labelate.app/Contents/MacOS/Labelate --check-printers         # Windows: dist\Labelate\Labelate.exe
+```
+
+The script bundles the fonts, `LICENSE`, `THIRD_PARTY_LICENSES.txt` and every installed
+printer driver (`--collect-all`, because `printing.module()` imports them by name), plus
+bleak's platform backends. On macOS it sets the bundle identifier
+`io.github.buganini.labelate`, the release version and `NSBluetoothAlwaysUsageDescription`
+(macOS terminates apps that use Bluetooth without it), then re-signs ad hoc or with the
+given Developer ID. pyusb's libusb is bundled from the build machine and listed in the
+notices. `--check-printers` imports every driver module and exits non-zero on failure.
+
 ## CI and GitHub Pages
 
 [Build and deploy Labelate](../.github/workflows/pages.yml) runs tests and builds on

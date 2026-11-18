@@ -46,3 +46,22 @@ def test_window_title_shows_the_package_version():
     assert title.startswith(f'Labelate v{labelate.__version__} — Label Template Editor (PUI {PUI.__version__} PySide6')
     for package, version in printing.driver_versions():
         assert f', {package} {version}' in title
+
+
+def test_check_printers_reports_every_brand():
+    # Packaged builds run `Labelate --check-printers` to prove the drivers were bundled.
+    import subprocess
+    import sys
+    from labelate import printing
+    result = subprocess.run([sys.executable, '-m', 'labelate', '--check-printers'], cwd=ROOT,
+                            capture_output=True, text=True, env={'QT_QPA_PLATFORM': 'offscreen', 'PATH': ''})
+    lines = result.stdout.strip().splitlines()
+    assert [line.split(':')[0] for line in lines] == list(printing.PACKAGES)
+    assert result.returncode == (0 if all(': ok' in line for line in lines) else 1), result.stderr
+
+
+def test_frozen_entry_keeps_sys_path():
+    # PyInstaller runs labelate/__main__.py as a top-level script; trimming sys.path there
+    # removed the bundle's import paths ("No module named 'labelate'").
+    source = (ROOT / 'labelate/__main__.py').read_text()
+    assert "getattr(sys, 'frozen', False)" in source

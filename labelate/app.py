@@ -958,6 +958,12 @@ class Labelate(UI.Application):
 
 def main():
     import sys
+    if sys.argv[1:] == ['--check-printers']:
+        # Packaging smoke test: prove the frozen app can import every printer driver.
+        from .printing import check_drivers
+        ok, lines = check_drivers()
+        print('\n'.join(lines))
+        sys.exit(0 if ok else 1)
     app = Labelate()
     if len(sys.argv) > 1:
         app.load_path(sys.argv[1])

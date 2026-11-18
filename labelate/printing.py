@@ -21,6 +21,23 @@ def driver_versions():
     return found
 
 
+def check_drivers():
+    """Import every driver module Labelate uses; return (ok, report lines). For packaged builds."""
+    ok, lines = True, []
+    versions = dict(driver_versions())
+    for brand, package in PACKAGES.items():
+        try:
+            for suffix in ('backends.helpers', 'models', 'raster', 'conversion'):
+                module(brand, suffix)
+            models(brand)
+        except Exception as exc:
+            ok = False
+            lines.append(f'{brand}: FAILED {exc}')
+        else:
+            lines.append(f'{brand}: ok ({package} {versions.get(package, "version unknown")})')
+    return ok, lines
+
+
 def module(brand, suffix):
     package = PACKAGES[brand]
     try:
