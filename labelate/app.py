@@ -599,10 +599,9 @@ class Labelate(UI.Application):
                 with UI.ComboBox(text_model=obj('font_weight')).id('font_weight'):
                     UI.ComboBoxItem('Normal', value='normal')
                     UI.ComboBoxItem('Bold', value='bold')
-            if self.template['canvas']['mode'] == 'color':
-                with UI.HBox():
-                    UI.Label('Color')
-                    self.button(obj.get('color', '#000000'), self.choose_color, 'color')
+            with UI.HBox():
+                UI.Label('Color' if self.template['canvas']['mode'] == 'color' else 'Color (printed as grey)')
+                self.button(obj.get('color', '#000000'), self.choose_color, 'color')
 
     def variables_panel(self):
         UI.Label('Variables').style(fontWeight=700)

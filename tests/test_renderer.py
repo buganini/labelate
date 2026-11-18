@@ -206,3 +206,44 @@ def test_greyscale_retains_intermediate_tones_and_legacy_mode():
     legacy = msgpack.packb(template, use_bin_type=True)
     assert loads(legacy)['canvas']['mode'] == 'greyscale'
     assert render(legacy, {}).tobytes() == output.tobytes()
+
+
+def _mono_template(objs):
+    template = new_template()
+    template['canvas'].update(width_mm=20, height_mm=20, dpi=200)
+    template['objects'] = objs
+    return template
+
+
+def test_mono_render_is_pure_black_and_white_and_png_is_not():
+    import io as _io
+    png = _io.BytesIO()
+    Image.new('L', (64, 64), 128).save(png, 'PNG')
+    photo = dict(new_object('image'), x_mm=0, y_mm=0, width_mm=20, height_mm=20, data=png.getvalue())
+    template = _mono_template([photo])
+    grey = render(dumps(template), {})
+    assert set(grey.tobytes()) - {0, 255}  # PNG/preview keeps the grey
+    mono = render(dumps(template), {}, mono=True)
+    values = list(mono.tobytes())
+    assert set(values) <= {0, 255}
+    # 50 % grey is dithered to roughly half the dots, not thresholded to one colour.
+    assert 0.35 < values.count(0) / len(values) < 0.65
+
+
+def test_mono_keeps_barcodes_and_black_text_thresholded():
+    qr = dict(new_object('qr'), x_mm=2, y_mm=2, width_mm=15, height_mm=15, rotation_deg=30)
+    template = _mono_template([qr])
+    mono = render(dumps(template), {'id': 'x'}, mono=True)
+    reference = render(dumps(template), {'id': 'x'}).point(lambda v: 0 if v < 255 - int(0.3 * 255) else 255)
+    assert set(mono.tobytes()) <= {0, 255}
+    assert mono.tobytes() == reference.tobytes()  # no dither noise on rotated QR edges
+
+
+def test_grey_text_in_greyscale_mode_is_grey_and_dithered():
+    from labelate.renderer import dithered
+    text = dict(new_object('text'), x_mm=0, y_mm=0, width_mm=20, height_mm=20,
+                content='█', font_size=40, color='#808080')
+    template = _mono_template([text])
+    assert {v for v in render(dumps(template), {}).tobytes()} & set(range(100, 160))
+    assert dithered(text) and not dithered(dict(text, color='#000000'))
+    assert not dithered(new_object('code128')) and not dithered(new_object('rect'))

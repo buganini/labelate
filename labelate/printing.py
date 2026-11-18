@@ -95,7 +95,7 @@ def prepare(printer, config, template_bytes, values):
     canvas = template['canvas']
     model = module(brand, 'models').ModelsManager().get_model_by_identifier(config['model'])
     canvas['dpi'] = 300 if brand == 'Brother' else model.dpi if brand == 'Niim' else model.dots_per_mm * 25.4
-    image = render(dumps(template), values)
+    image = render(dumps(template), values, mono=True)
     label = f"{canvas['width_mm']:g}x{canvas['height_mm']:g}"
     conversion = module(brand, 'conversion').convert
     raster_module = module(brand, 'raster')
