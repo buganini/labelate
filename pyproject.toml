@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "labelate"
-version = "202611181"
+version = "202611182"
 license = "MIT"
 license-files = ["LICENSE"]
 description = "A QPUIQ label template editor and Pillow renderer"
