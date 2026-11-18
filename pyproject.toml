@@ -15,8 +15,8 @@ dependencies = ["QPUIQ[pyside6]==1.10", "Pillow>=10", "qrcode>=7.4", "python-bar
 dev = ["pytest>=8"]
 brother = ['brother-ql @ git+https://github.com/pklaus/brother_ql.git@0dee94b5fc3721159bae556b8bd2d975f92b7b8b']
 niim = ['pyniim @ git+https://github.com/buganini/pyniim.git@de4d2943cc42879d8a3228d9975eacb8694a7189']
-tsc = ['pytsc[usb] @ git+https://github.com/buganini/pytsc.git@9ab9c468b7f391b3a9465fb165f4df765fcea215']
-printers = ['brother-ql @ git+https://github.com/pklaus/brother_ql.git@0dee94b5fc3721159bae556b8bd2d975f92b7b8b', 'pyniim @ git+https://github.com/buganini/pyniim.git@de4d2943cc42879d8a3228d9975eacb8694a7189', 'pytsc[usb] @ git+https://github.com/buganini/pytsc.git@9ab9c468b7f391b3a9465fb165f4df765fcea215']
+tsc = ['pytsc[usb] @ git+https://github.com/buganini/pytsc.git@e828054f813aefbb8e34ba3fbef802d15c5bb74f']
+printers = ['brother-ql @ git+https://github.com/pklaus/brother_ql.git@0dee94b5fc3721159bae556b8bd2d975f92b7b8b', 'pyniim @ git+https://github.com/buganini/pyniim.git@de4d2943cc42879d8a3228d9975eacb8694a7189', 'pytsc[usb] @ git+https://github.com/buganini/pytsc.git@e828054f813aefbb8e34ba3fbef802d15c5bb74f']
 
 
 [project.scripts]
