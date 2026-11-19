@@ -35,6 +35,35 @@ for batch printing.
   Names follow `[A-Za-z_][A-Za-z0-9_]*`.
 - Invalid objects appear as red boxes with details in the status line.
 
+## Importing variables from a spreadsheet
+
+Fill a label's `{variables}` from an XLSX or CSV file to print one label per row,
+on both desktop and web.
+
+1. Put `{name}` placeholders in text, QR, or Code128 content on the **Label** tab.
+   Each variable becomes a column in the **Data** tab.
+2. Prepare the spreadsheet: the first row holds column names matching the variable
+   names exactly (case-sensitive, surrounding spaces ignored); each later row is
+   one label. For example, a template using `{SN}` and `{customer}`:
+
+   | SN | customer | notes |
+   | --- | --- | --- |
+   | A-001 | Ada | |
+   | A-002 | Bob | |
+
+3. On the **Data** tab, click **Import XLSX/CSV** and choose the file.
+
+- Only the first worksheet of an XLSX is read; formulas use their last saved values.
+  CSV files are read as UTF-8 (a BOM is fine).
+- Columns without a matching variable (such as `notes`) are ignored; a variable
+  without a column imports as empty text. Column names must be unique.
+- Importing replaces the current rows. Edit cells by double-clicking, and use
+  **Add row**, **Dedup**, or **Remove selected row** to adjust them.
+- A table may hold up to 10,000 cells (rows × variables). Rows are saved in the
+  `.lbl` file.
+- **Print All** prints every row once; with **File / PNG** output it writes one
+  PNG per row (`label-0001.png`, …).
+
 ## Opening and downloading files
 
 - **Open .lbl** imports a MessagePack template, including embedded images.
@@ -65,8 +94,8 @@ Select Brother, Niim, or TSC as the printer brand to scan for devices. Use
 **Printer settings** to configure model and media options.
 
 - **Print Single Label** prints the current template (with **Copies** count).
-- In the Data tab, **Print All** prints every row once.
-- **Import XLSX/CSV** loads data rows matched to template variables by column name.
+- In the Data tab, **Print All** prints every row once (see
+  [Importing variables from a spreadsheet](#importing-variables-from-a-spreadsheet)).
 
 Install printer support:
 
