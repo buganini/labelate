@@ -104,8 +104,13 @@ python -m pip install -e '.[printers]'   # All three families
 # Or: .[brother]  .[niim]  .[tsc]
 ```
 
-USB requires system libusb; BLE requires Bluetooth permissions. File/PNG output
-is available on both desktop and web.
+USB uses the libusb shipped with the printer extras; on Windows the printer must
+use the WinUSB driver (for example via [Zadig](https://zadig.akeo.ie/)). BLE
+requires Bluetooth permissions. File/PNG output is available on both desktop and web.
+
+Support for more label printers is welcome, as long as you have the hardware to
+test it on. Printer drivers live in separate packages (see
+[docs/development.md](docs/development.md#printer-adapters)).
 
 ## License
 
