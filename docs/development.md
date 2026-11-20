@@ -62,7 +62,7 @@ python -m pip install -e '.[dev]'
 npm ci
 mkdir -p .build
 git clone https://github.com/buganini/PUI.git .build/PUI
-git -C .build/PUI checkout eac5c6397d502c7cce077bd64813c4c615755305
+git -C .build/PUI checkout 7723c057276e80e511d43ce8d567a14c311f46bf
 python scripts/build_pyodide.py
 npm run build
 python3 -m http.server 8868 --directory dist/pyodide
