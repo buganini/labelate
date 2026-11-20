@@ -9,7 +9,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 description = "A QPUIQ label template editor and Pillow renderer"
 requires-python = ">=3.11"
-dependencies = ["QPUIQ[pyside6]==1.10", "Pillow>=10", "qrcode>=7.4", "python-barcode>=0.15", "msgpack==1.1.2", "openpyxl==3.1.5"]
+dependencies = ["QPUIQ[pyside6]==1.11", "Pillow>=10", "qrcode>=7.4", "python-barcode>=0.15", "msgpack==1.1.2", "openpyxl==3.1.5"]
 
 [project.optional-dependencies]
 # libusb-package ships the libusb shared library pyusb needs (Windows has none).

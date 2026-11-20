@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PUI_COMMIT = 'eac5c6397d502c7cce077bd64813c4c615755305'  # QPUIQ 1.10 release
+PUI_COMMIT = '7723c057276e80e511d43ce8d567a14c311f46bf'  # QPUIQ 1.11 release
 PYODIDE_VERSION = '314.0.7'
 WHEELS = ('qrcode==8.2', 'python-barcode==0.16.1', 'msgpack==1.1.2', 'openpyxl==3.1.5', 'et-xmlfile==2.0.0')
 CDN_NOTE = (
@@ -41,7 +41,7 @@ def main():
     source = args.pui_source.resolve()
     commit = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
     if commit != PUI_COMMIT:
-        parser.error(f'PUI source must be pinned to {PUI_COMMIT} (QPUIQ 1.10)')
+        parser.error(f'PUI source must be pinned to {PUI_COMMIT} (QPUIQ 1.11)')
     subprocess.run(['git', '-C', str(source), 'diff', '--exit-code', 'HEAD', '--', 'PUI', 'browser-client'], check=True)
     output = ROOT / 'dist/pyodide'
     output.mkdir(parents=True, exist_ok=True)
@@ -90,7 +90,7 @@ def main():
     (output / 'THIRD_PARTY_LICENSES.txt').write_text(notices, encoding='utf-8')
     (output / '.nojekyll').touch()
     (output / 'build-info.json').write_text(json.dumps({
-        'qpuiq': '1.10', 'pui_commit': PUI_COMMIT, 'pyodide': PYODIDE_VERSION,
+        'qpuiq': '1.11', 'pui_commit': PUI_COMMIT, 'pyodide': PYODIDE_VERSION,
         'qrcode': '8.2', 'python-barcode': '0.16.1', 'license': 'MIT',
         'fonts': [entry['name'] + ' ' + entry['version'] for entry in fetch_fonts.NOTICES], 'msgpack': '1.1.2', 'openpyxl': '3.1.5', 'et-xmlfile': '2.0.0'
     }, indent=2) + '\n')

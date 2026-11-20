@@ -71,7 +71,7 @@ python3 -m http.server 8868 --directory dist/pyodide
 Open [http://localhost:8868](http://localhost:8868). Do not open `index.html` with
 `file://`. Deploy `dist/pyodide/` to any HTTPS static host, including a URL subpath.
 
-The Python builder pins the QPUIQ 1.10 source commit and packages only shared/Pyodide
+The Python builder pins the QPUIQ 1.11 source commit and packages only shared/Pyodide
 modules, Labelate, qrcode 8.2, python-barcode 0.16.1, and msgpack 1.1.2
 (using its pure Python implementation in the browser). The JavaScript builder
 adapts the pinned PUI cookbook bootstrap to start Labelate, loading Pyodide
@@ -189,4 +189,4 @@ The CJK font adds about 16 MB before compression. Without the downloaded files a
 bundled reference falls back to an installed copy of that family, then to the
 platform/Pillow default.
 
-PUI is pinned to commit `eac5c6397d502c7cce077bd64813c4c615755305` for the QPUIQ 1.10 release.
+PUI is pinned to commit `7723c057276e80e511d43ce8d567a14c311f46bf` for the QPUIQ 1.11 release.
