@@ -5,6 +5,10 @@ A label template editor and renderer.
 - **Web app** — edit labels and export PNG, right in the browser.
 - **Desktop app** — connect to Brother, Niim, or TSC label printers and print directly.
 
+> **Support for more label printers is welcome**, as long as you have the hardware
+> to test it on. Printer drivers live in separate packages (see
+> [docs/development.md](docs/development.md#printer-adapters)).
+
 **Open the web app: [https://buganini.github.io/labelate/](https://buganini.github.io/labelate/)**
 
 Use a current browser with WebAssembly JSPI support, such as Chrome or Edge.
@@ -107,10 +111,6 @@ python -m pip install -e '.[printers]'   # All three families
 USB uses the libusb shipped with the printer extras; on Windows the printer must
 use the WinUSB driver (for example via [Zadig](https://zadig.akeo.ie/)). BLE
 requires Bluetooth permissions. File/PNG output is available on both desktop and web.
-
-Support for more label printers is welcome, as long as you have the hardware to
-test it on. Printer drivers live in separate packages (see
-[docs/development.md](docs/development.md#printer-adapters)).
 
 ## License
 
