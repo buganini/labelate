@@ -5,6 +5,7 @@ A label template editor and renderer.
 - **Web app** — edit labels and export PNG, right in the browser.
 - **Desktop app** — connect to Brother, Niim, or TSC label printers and print directly.
 
+> [!IMPORTANT]
 > **Support for more label printers is welcome**, as long as you have the hardware
 > to test it on. Printer drivers live in separate packages (see
 > [docs/development.md](docs/development.md#printer-adapters)).
